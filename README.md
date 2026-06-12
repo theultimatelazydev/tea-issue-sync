@@ -83,6 +83,10 @@ top-level section — useful for per-machine URLs without touching the tracked
 file. `output.dir` is relative to the config file's directory, so the mirror
 lands in the same place no matter where in the repo you invoke the tool from.
 
+The `config.json` tracked in this repo holds placeholder values: either edit
+it in your own checkout, or leave it and put your real instance in a
+(gitignored) `config.local.json` next to it.
+
 ```json
 {
   "gitea":  { "url": "https://gitea.example.com", "owner": "me", "repo": "my-repo" },
