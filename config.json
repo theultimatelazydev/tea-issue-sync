@@ -1,8 +1,8 @@
 {
   "gitea": {
-    "url": "http://gitea.example.com",
-    "owner": "reneabreu",
-    "repo": "ultimate-asset-manager"
+    "url": "https://gitea.example.com",
+    "owner": "me",
+    "repo": "my-repo"
   },
   "output": {
     "dir": ".issues-tea"
