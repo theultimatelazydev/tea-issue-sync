@@ -11,9 +11,10 @@ push the edits back.
 > Markdown format**, so tooling written against `gh-issue-sync`'s `.issues/`
 > folder works against a `tea-issue-sync` folder unchanged.
 
-`pull` (Gitea → local), `status` / `diff` (drift inspection) and `push`
-(local → Gitea) are implemented; see [ROADMAP.md](ROADMAP.md) for what's
-next. Zero runtime dependencies — just Node 18+ (uses the global `fetch`).
+`pull` (Gitea → local, full or incremental), `status` / `diff` (drift
+inspection) and `push` (local → Gitea) are implemented; see
+[ROADMAP.md](ROADMAP.md). Ships as a self-contained binary (no runtime
+needed) or runs from source on Node 18+ with zero dependencies.
 
 ## What it does
 
@@ -36,6 +37,22 @@ tool can move independently of any particular repo's mirror.
 > The output folder is typically a local read-cache (e.g. `.gitignore`d) since
 > the issues already live on the server — the Markdown just saves you a round
 > trip. Track it only if you want issues-as-code (diffable, offline, in CI).
+
+## Install
+
+Download a binary from the repo's **releases** page — it's self-contained,
+no Node required:
+
+```bash
+curl -fL -o /usr/local/bin/tea-issue-sync \
+  "https://<your-gitea>/TheUltimateLazyDev/tea-issue-sync/releases/download/v1.0.0/tea-issue-sync-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"
+chmod +x /usr/local/bin/tea-issue-sync
+```
+
+Or skip installing and run from source with Node 18+ (zero dependencies):
+`node tea-issue-sync.mjs …`. To build binaries yourself you need
+[bun](https://bun.sh): `./build.sh` for the current platform, or
+`./build.sh --all` for darwin/linux × arm64/x64 into `dist/`.
 
 ## Usage
 

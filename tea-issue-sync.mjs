@@ -33,7 +33,7 @@ import { readFileSync, rmSync, mkdirSync, writeFileSync, existsSync, readdirSync
 import { dirname, join, resolve, relative } from "node:path";
 import { homedir } from "node:os";
 
-export const VERSION = "0.9.0";
+export const VERSION = "1.0.0";
 
 const MANAGED_DIRS = ["open", "closed", "pulls/open", "pulls/closed"];
 
