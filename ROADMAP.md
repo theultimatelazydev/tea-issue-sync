@@ -38,13 +38,18 @@
       `node --test`, plus a Gitea Actions workflow (needs a registered
       runner)
 
-## Phase 3 — standalone distribution
+## Phase 3 — standalone distribution ✅
 
-- [ ] Package as a self-contained binary so Node is no longer required.
-      Cheapest path that keeps the current zero-dependency source:
-      `bun build --compile` or `deno compile` (both produce a single static
-      executable from the existing `.mjs` with little or no change).
-      A Go/Rust rewrite is the fallback if binary size or startup time ever
-      matters — not before.
-- [ ] Versioned releases on Gitea + an install one-liner (and optionally a
-      Homebrew tap)
+- [x] Self-contained binaries via `bun build --compile` (`./build.sh`,
+      `--all` for darwin/linux × arm64/x64) — Node is no longer required to
+      run the tool; bun is a build-time dependency only
+- [x] Versioned releases on Gitea (binaries attached) + an install
+      one-liner in the README
+- [ ] Homebrew tap — deferred until the repo lands on its public host
+
+## Later / ideas
+
+- Conflict-aware push (compare against a pulled base snapshot to detect
+  remote changes since the last pull before overwriting)
+- `pull --prune` using the repo's issue count to detect deletions without a
+  full rewrite
