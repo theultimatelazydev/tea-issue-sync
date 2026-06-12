@@ -1,0 +1,15 @@
+{
+  "gitea": {
+    "url": "http://gitea.example.com",
+    "owner": "reneabreu",
+    "repo": "ultimate-asset-manager"
+  },
+  "output": {
+    "dir": ".issues-tea"
+  },
+  "mirror": {
+    "comment": "RayLabsHQ/gitea-mirror imports GitHub PRs as Gitea issues labelled 'pull-request' with a '[PR #N]' title prefix. Detect those and route them to <dir>/pulls/ instead of the issue folders.",
+    "pullLabel": "pull-request",
+    "pullTitlePrefix": "[PR #"
+  }
+}
