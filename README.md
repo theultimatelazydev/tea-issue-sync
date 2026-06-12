@@ -2,8 +2,8 @@
 
 Mirror a [Gitea](https://about.gitea.com/) repository's issues to local
 Markdown files — one file per issue, with YAML frontmatter — so you can read,
-search, grep, and (eventually) edit your issues from your editor instead of a
-browser.
+search, grep, and edit your issues from your editor instead of a browser, and
+push the edits back.
 
 > **Inspired by [`gh-issue-sync`](https://github.com/mitsuhiko/gh-issue-sync)**
 > by Armin Ronacher (mitsuhiko), which does the same thing for GitHub.
@@ -11,9 +11,9 @@ browser.
 > Markdown format**, so tooling written against `gh-issue-sync`'s `.issues/`
 > folder works against a `tea-issue-sync` folder unchanged.
 
-This is an early-stage tool: `pull` (Gitea → local Markdown) is implemented;
-`push` / `status` / `diff` are on the [roadmap](#roadmap). Zero runtime
-dependencies — just Node 18+ (uses the global `fetch`).
+`pull` (Gitea → local), `status` / `diff` (drift inspection) and `push`
+(local → Gitea) are implemented; see [ROADMAP.md](ROADMAP.md) for what's
+next. Zero runtime dependencies — just Node 18+ (uses the global `fetch`).
 
 ## What it does
 
@@ -40,11 +40,38 @@ tool can move independently of any particular repo's mirror.
 ## Usage
 
 ```bash
-node tea-issue-sync.mjs pull                  # mirror Gitea → <output>/
-node tea-issue-sync.mjs pull --dry-run        # counts + a sample, writes nothing
-node tea-issue-sync.mjs pull --config <path>  # explicit config location
+node tea-issue-sync.mjs pull             # mirror Gitea → <output>/
+node tea-issue-sync.mjs pull --dry-run   # counts + a sample, writes nothing
+node tea-issue-sync.mjs status           # list local-vs-remote drift (exit 1 if any)
+node tea-issue-sync.mjs diff             # unified diff of the drift, remote → local
+node tea-issue-sync.mjs push             # push local edits / new files to Gitea
+node tea-issue-sync.mjs push --dry-run   # show what push would do
 node tea-issue-sync.mjs --help
 ```
+
+Every command accepts `--config <path>` (see below).
+
+## Editing issues locally
+
+After a `pull`, the Markdown files are yours to edit — `title`, `labels`,
+`state` in the frontmatter, and the body below it. `status` shows what
+drifted (per file, per field), `diff` shows it as a unified diff, and `push`
+applies it to Gitea, updating only the fields that actually differ.
+
+Conventions:
+
+- **The leading number in the filename is the issue's identity.** A file
+  *without* one (e.g. `open/my-idea.md` with just frontmatter + body) is a
+  new issue: `push` creates it on Gitea and renames the file to its canonical
+  `<index>-<slug>.md` name.
+- **Frontmatter `state` wins over folder placement.** Flip `state: open` to
+  `closed` to close an issue on push; the file moves to the right folder on
+  the next `pull`.
+- **`push` never deletes.** Deleting a local file does nothing remotely
+  (Gitea stays the source of truth for existence; the next `pull` simply
+  restores the mirror). Labels that don't exist on the remote are skipped
+  with a warning, not created.
+- **`pulls/` is read-only.** The PR mirror is never compared or pushed.
 
 ## Configuration & auth
 
@@ -108,43 +135,8 @@ between the two.
 
 ## Roadmap
 
-### Phase 0 — housekeeping & portability fixes
-
-- [x] `pull` — Gitea → local Markdown
-- [x] `.gitignore` (output mirror, secrets, OS/editor noise)
-- [x] **Fix output-path resolution.** `output.dir` now resolves against the
-      config file's directory, not the script location (which broke when the
-      script moved out of `scripts/tea-issue-sync/`).
-- [x] **Config discovery + `--config` flag.** The nearest `config.json` from
-      the cwd up to the git root, with `config.local.json` per-section
-      overrides — the prerequisite for one installed binary serving many
-      repos.
-- [x] License: Apache-2.0.
-
-### Phase 1 — the write path
-
-- [ ] `status` — show local-vs-remote drift (do this *before* `push`; it is
-      the read-only dry-run of the same comparison logic)
-- [ ] `diff` — per-issue unified diff of the drift `status` reports
-- [ ] `push` — local → Gitea (create/update issues from edited Markdown)
-
-### Phase 2 — quality of life
-
-- [ ] Incremental pull (`since` timestamp) instead of a full wipe-and-rewrite
-- [ ] Mirror issue comments (optional, behind a config flag)
-- [ ] Basic test suite (frontmatter round-trip, slug edge cases, PR routing)
-      and a CI job on the Gitea instance
-
-### Phase 3 — standalone distribution
-
-- [ ] Package as a self-contained binary so Node is no longer required.
-      Cheapest path that keeps the current zero-dependency source:
-      `bun build --compile` or `deno compile` (both produce a single static
-      executable from the existing `.mjs` with little or no change).
-      A Go/Rust rewrite is the fallback if binary size or startup time ever
-      matters — not before.
-- [ ] Versioned releases on Gitea + an install one-liner (and optionally a
-      Homebrew tap)
+See [ROADMAP.md](ROADMAP.md). Done: phases 0–1 (pull, status, diff, push).
+Next: incremental pull, comments, tests; then standalone packaging.
 
 ## Credit
 
