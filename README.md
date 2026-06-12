@@ -40,14 +40,21 @@ tool can move independently of any particular repo's mirror.
 ## Usage
 
 ```bash
-node tea-issue-sync.mjs pull            # mirror Gitea → <output>/
-node tea-issue-sync.mjs pull --dry-run  # counts + a sample, writes nothing
+node tea-issue-sync.mjs pull                  # mirror Gitea → <output>/
+node tea-issue-sync.mjs pull --dry-run        # counts + a sample, writes nothing
+node tea-issue-sync.mjs pull --config <path>  # explicit config location
 node tea-issue-sync.mjs --help
 ```
 
 ## Configuration & auth
 
-`config.json` (next to the script) defines the target and output:
+`config.json` defines the target and output. It is resolved per *invocation*,
+not per install: `--config <path>` if given, otherwise the nearest
+`config.json` walking up from the current directory (stopping at the git
+root). A `config.local.json` next to the chosen config overrides it per
+top-level section — useful for per-machine URLs without touching the tracked
+file. `output.dir` is relative to the config file's directory, so the mirror
+lands in the same place no matter where in the repo you invoke the tool from.
 
 ```json
 {
@@ -105,16 +112,14 @@ between the two.
 
 - [x] `pull` — Gitea → local Markdown
 - [x] `.gitignore` (output mirror, secrets, OS/editor noise)
-- [ ] **Fix output-path resolution.** The script still computes the repo root
-      as two directories above itself (a leftover from living in
-      `scripts/tea-issue-sync/`); now that it sits at the repo root, the
-      output folder is written *outside* the repo. Resolve `output.dir`
-      against the current working directory instead of the script location.
-- [ ] **Config discovery + `--config` flag.** Look for `config.json` in the
-      cwd (walking upward to the git root), not next to the script, and
-      support `config.local.json` overrides. This is the prerequisite for one
-      installed binary serving many repos.
-- [ ] Pick a license.
+- [x] **Fix output-path resolution.** `output.dir` now resolves against the
+      config file's directory, not the script location (which broke when the
+      script moved out of `scripts/tea-issue-sync/`).
+- [x] **Config discovery + `--config` flag.** The nearest `config.json` from
+      the cwd up to the git root, with `config.local.json` per-section
+      overrides — the prerequisite for one installed binary serving many
+      repos.
+- [x] License: Apache-2.0.
 
 ### Phase 1 — the write path
 
@@ -149,4 +154,5 @@ its design — this project carries them over to Gitea.
 
 ## License
 
-TBD.
+Apache-2.0. Like `gh-issue-sync`: this code is entirely LLM generated. It is
+unclear if LLM generated code can be copyrighted.

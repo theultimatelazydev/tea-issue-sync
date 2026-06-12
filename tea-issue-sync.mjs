@@ -12,25 +12,51 @@
 // repo/binary later without dragging any particular repo's mirror along.
 //
 // Usage:
-//   node scripts/tea-issue-sync/tea-issue-sync.mjs pull [--dry-run]
-//   node scripts/tea-issue-sync/tea-issue-sync.mjs --help
+//   node tea-issue-sync.mjs pull [--dry-run] [--config <path>]
+//   node tea-issue-sync.mjs --help
+//
+// Config resolution: --config <path> if given, else the nearest config.json
+// walking up from the cwd (stopping at the git root). A config.local.json
+// next to the chosen config overrides it per top-level section. Paths in the
+// config (output.dir) are relative to the config file's directory.
 //
 // Token resolution (never committed): $GITEA_TOKEN, else the matching login's
 // token in tea's config.yml (~/Library/Application Support/tea/config.yml or
 // ~/.config/tea/config.yml).
 
 import { readFileSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, resolve, relative } from "node:path";
 import { homedir } from "node:os";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, "..", "..");
+function findConfig(explicitPath) {
+  if (explicitPath) {
+    const p = resolve(explicitPath);
+    if (!existsSync(p)) fail(`config not found: ${explicitPath}`);
+    return p;
+  }
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = join(dir, "config.json");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (existsSync(join(dir, ".git")) || parent === dir) break; // git root / fs root
+    dir = parent;
+  }
+  fail("no config.json found between the cwd and the git root; pass --config <path>");
+}
 
-function loadConfig() {
-  const cfg = JSON.parse(readFileSync(join(HERE, "config.json"), "utf8"));
+function loadConfig(configPath) {
+  const cfg = JSON.parse(readFileSync(configPath, "utf8"));
+  // Per-machine overrides, merged per top-level section (gitea/output/mirror).
+  const localPath = join(dirname(configPath), "config.local.json");
+  if (existsSync(localPath)) {
+    const local = JSON.parse(readFileSync(localPath, "utf8"));
+    for (const [key, val] of Object.entries(local)) {
+      cfg[key] = val && typeof val === "object" && !Array.isArray(val) ? { ...cfg[key], ...val } : val;
+    }
+  }
   if (!cfg.gitea?.url || !cfg.gitea?.owner || !cfg.gitea?.repo) {
-    fail("config.json missing gitea.url / gitea.owner / gitea.repo");
+    fail(`${configPath} missing gitea.url / gitea.owner / gitea.repo`);
   }
   return cfg;
 }
@@ -122,13 +148,17 @@ function renderMarkdown(item) {
 }
 
 function relForLog(absPath) {
-  return absPath.startsWith(REPO_ROOT) ? absPath.slice(REPO_ROOT.length + 1) : absPath;
+  const rel = relative(process.cwd(), absPath);
+  return rel && !rel.startsWith("..") ? rel : absPath;
 }
 
-async function cmdPull({ dryRun }) {
-  const cfg = loadConfig();
+async function cmdPull({ dryRun, configPath }) {
+  const cfgPath = findConfig(configPath);
+  const cfg = loadConfig(cfgPath);
   const token = resolveToken(cfg.gitea.url);
-  const outDir = resolve(REPO_ROOT, cfg.output.dir);
+  // output.dir is relative to the config file, so the mirror lands in the
+  // same place no matter how deep in the repo the tool is invoked from.
+  const outDir = resolve(dirname(cfgPath), cfg.output?.dir || ".issues-tea");
 
   process.stdout.write(`Fetching issues from ${cfg.gitea.url} (${cfg.gitea.owner}/${cfg.gitea.repo}) …\n`);
   const items = await apiGetAll(cfg, token);
@@ -176,16 +206,21 @@ function fail(msg) {
 const HELP = `tea-issue-sync — mirror Gitea issues to local Markdown (start of a gh-issue-sync counterpart)
 
 Usage:
-  tea-issue-sync pull [--dry-run]   Pull all issues + PR-mirror items into the output folder
+  tea-issue-sync pull [--dry-run] [--config <path>]   Pull all issues + PR-mirror items into the output folder
   tea-issue-sync --help
 
-Config: scripts/tea-issue-sync/config.json   Token: $GITEA_TOKEN or tea's config.yml
+Config: --config <path>, else the nearest config.json from the cwd up to the git root
+        (config.local.json next to it overrides per section; output.dir is relative to the config file)
+Token:  $GITEA_TOKEN or tea's config.yml
 Roadmap (TBD): push (local → Gitea), status, diff. See README.md.`;
 
 const [cmd, ...rest] = process.argv.slice(2);
 const dryRun = rest.includes("--dry-run");
+const configFlag = rest.indexOf("--config");
+const configPath = configFlag !== -1 ? rest[configFlag + 1] : null;
+if (configFlag !== -1 && !configPath) fail("--config requires a path");
 if (cmd === "pull") {
-  cmdPull({ dryRun }).catch((e) => fail(e?.message || String(e)));
+  cmdPull({ dryRun, configPath }).catch((e) => fail(e?.message || String(e)));
 } else if (cmd === "--help" || cmd === "-h" || !cmd) {
   process.stdout.write(HELP + "\n");
 } else {
