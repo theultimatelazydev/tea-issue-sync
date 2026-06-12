@@ -1,0 +1,26 @@
+# Synced issue mirror — a local read-cache; Gitea is the source of truth.
+# Remove this line only if you want issues-as-code (diffable, offline, in CI).
+.issues-tea/
+
+# Secrets. Tokens are resolved at runtime ($GITEA_TOKEN or tea's config.yml)
+# and must never be committed.
+.env
+.env.*
+
+# Per-machine config overrides (planned; see roadmap).
+config.local.json
+
+# Node. Zero runtime deps today — this covers future dev tooling.
+node_modules/
+npm-debug.log*
+
+# Claude Code workspace
+.claude/worktrees/
+.claude/settings.local.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
