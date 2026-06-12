@@ -101,11 +101,45 @@ between the two.
 
 ## Roadmap
 
+### Phase 0 — housekeeping & portability fixes
+
 - [x] `pull` — Gitea → local Markdown
+- [x] `.gitignore` (output mirror, secrets, OS/editor noise)
+- [ ] **Fix output-path resolution.** The script still computes the repo root
+      as two directories above itself (a leftover from living in
+      `scripts/tea-issue-sync/`); now that it sits at the repo root, the
+      output folder is written *outside* the repo. Resolve `output.dir`
+      against the current working directory instead of the script location.
+- [ ] **Config discovery + `--config` flag.** Look for `config.json` in the
+      cwd (walking upward to the git root), not next to the script, and
+      support `config.local.json` overrides. This is the prerequisite for one
+      installed binary serving many repos.
+- [ ] Pick a license.
+
+### Phase 1 — the write path
+
+- [ ] `status` — show local-vs-remote drift (do this *before* `push`; it is
+      the read-only dry-run of the same comparison logic)
+- [ ] `diff` — per-issue unified diff of the drift `status` reports
 - [ ] `push` — local → Gitea (create/update issues from edited Markdown)
-- [ ] `status` / `diff` — show local-vs-remote drift
-- [ ] incremental pull (since-timestamp) instead of a full rewrite
-- [ ] packaging as an installable CLI / standalone binary
+
+### Phase 2 — quality of life
+
+- [ ] Incremental pull (`since` timestamp) instead of a full wipe-and-rewrite
+- [ ] Mirror issue comments (optional, behind a config flag)
+- [ ] Basic test suite (frontmatter round-trip, slug edge cases, PR routing)
+      and a CI job on the Gitea instance
+
+### Phase 3 — standalone distribution
+
+- [ ] Package as a self-contained binary so Node is no longer required.
+      Cheapest path that keeps the current zero-dependency source:
+      `bun build --compile` or `deno compile` (both produce a single static
+      executable from the existing `.mjs` with little or no change).
+      A Go/Rust rewrite is the fallback if binary size or startup time ever
+      matters — not before.
+- [ ] Versioned releases on Gitea + an install one-liner (and optionally a
+      Homebrew tap)
 
 ## Credit
 
