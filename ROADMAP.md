@@ -25,12 +25,18 @@
       canonical filename afterwards. Never deletes anything remotely, and
       ignores `pulls/` (read-only mirror).
 
-## Phase 2 — quality of life
+## Phase 2 — quality of life ✅
 
-- [ ] Incremental pull (`since` timestamp) instead of a full wipe-and-rewrite
-- [ ] Mirror issue comments (optional, behind a config flag)
-- [ ] Basic test suite (frontmatter round-trip, slug edge cases, PR routing,
-      drift detection) and a CI job on the Gitea instance
+- [x] Incremental pull: `pull --incremental` resumes from the `syncedAt`
+      high-water mark in `.gitea-sync.json` and rewrites only updated issues
+      (renames/moves handled by number; remote deletions still need a full
+      pull)
+- [x] Mirror issue comments behind `output.comments` — read-only
+      `<index>-<slug>.comments.md` sidecars, ignored by status/diff/push
+- [x] Test suite (18 tests on the pure helpers: slugs, YAML round-trip, PR
+      routing, drift detection, unified diff, comment rendering) via
+      `node --test`, plus a Gitea Actions workflow (needs a registered
+      runner)
 
 ## Phase 3 — standalone distribution
 

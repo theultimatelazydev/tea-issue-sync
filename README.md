@@ -40,16 +40,30 @@ tool can move independently of any particular repo's mirror.
 ## Usage
 
 ```bash
-node tea-issue-sync.mjs pull             # mirror Gitea → <output>/
-node tea-issue-sync.mjs pull --dry-run   # counts + a sample, writes nothing
-node tea-issue-sync.mjs status           # list local-vs-remote drift (exit 1 if any)
-node tea-issue-sync.mjs diff             # unified diff of the drift, remote → local
-node tea-issue-sync.mjs push             # push local edits / new files to Gitea
-node tea-issue-sync.mjs push --dry-run   # show what push would do
-node tea-issue-sync.mjs --help
+node tea-issue-sync.mjs pull                 # mirror Gitea → <output>/ (full rewrite)
+node tea-issue-sync.mjs pull --incremental   # only issues updated since the last sync
+node tea-issue-sync.mjs pull --dry-run       # counts + a sample, writes nothing
+node tea-issue-sync.mjs status               # list local-vs-remote drift (exit 1 if any)
+node tea-issue-sync.mjs diff                 # unified diff of the drift, remote → local
+node tea-issue-sync.mjs push                 # push local edits / new files to Gitea
+node tea-issue-sync.mjs push --dry-run       # show what push would do
+node tea-issue-sync.mjs --help               # also: --version
 ```
 
 Every command accepts `--config <path>` (see below).
+
+An incremental pull resumes from the `syncedAt` high-water mark in
+`.gitea-sync.json` and rewrites only what changed (handling renames and
+state moves). Remote *deletions* are invisible to the since-feed, so run a
+full `pull` periodically to reap those.
+
+### Comments
+
+Set `"comments": true` in the `output` section to mirror each issue's
+comments into a read-only sidecar next to the issue file —
+`<index>-<slug>.comments.md` — one `## @author — timestamp` section per
+comment. The issue file itself stays in the `gh-issue-sync`-compatible
+format, and `status` / `diff` / `push` ignore the sidecars.
 
 ## Editing issues locally
 
@@ -90,7 +104,7 @@ it in your own checkout, or leave it and put your real instance in a
 ```json
 {
   "gitea":  { "url": "https://gitea.example.com", "owner": "me", "repo": "my-repo" },
-  "output": { "dir": ".issues-tea" },
+  "output": { "dir": ".issues-tea", "comments": false },
   "mirror": { "pullLabel": "pull-request", "pullTitlePrefix": "[PR #" }
 }
 ```
@@ -137,10 +151,20 @@ Single-quoted `title`, a YAML `labels` list (4-space indent), `state`, and
 `state_reason` — identical to `gh-issue-sync`, so reading tools are portable
 between the two.
 
+## Development
+
+```bash
+node --test tea-issue-sync.test.mjs
+```
+
+Zero dependencies — the suite uses Node's built-in `node:test`. CI runs it
+via [`.gitea/workflows/test.yml`](.gitea/workflows/test.yml) (needs a
+registered Gitea Actions runner).
+
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Done: phases 0–1 (pull, status, diff, push).
-Next: incremental pull, comments, tests; then standalone packaging.
+See [ROADMAP.md](ROADMAP.md). Done: phases 0–2 (pull incl. incremental and
+comments, status, diff, push, tests + CI). Next: standalone packaging.
 
 ## Credit
 

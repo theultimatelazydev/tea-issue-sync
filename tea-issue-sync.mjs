@@ -12,10 +12,13 @@
 // repo/binary later without dragging any particular repo's mirror along.
 //
 // Usage:
-//   node tea-issue-sync.mjs pull [--dry-run] [--config <path>]
+//   node tea-issue-sync.mjs pull [--incremental] [--dry-run] [--config <path>]
 //   node tea-issue-sync.mjs status|diff [--config <path>]
 //   node tea-issue-sync.mjs push [--dry-run] [--config <path>]
-//   node tea-issue-sync.mjs --help
+//   node tea-issue-sync.mjs --help | --version
+//
+// The pure helpers are exported for the test suite; setting
+// $TEA_ISSUE_SYNC_AS_LIB skips the CLI dispatch on import.
 //
 // Config resolution: --config <path> if given, else the nearest config.json
 // walking up from the cwd (stopping at the git root). A config.local.json
@@ -29,6 +32,10 @@
 import { readFileSync, rmSync, mkdirSync, writeFileSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { dirname, join, resolve, relative } from "node:path";
 import { homedir } from "node:os";
+
+export const VERSION = "0.9.0";
+
+const MANAGED_DIRS = ["open", "closed", "pulls/open", "pulls/closed"];
 
 function findConfig(explicitPath) {
   if (explicitPath) {
@@ -117,6 +124,16 @@ async function apiGetPaged(cfg, token, path) {
   return out;
 }
 
+// Single unpaginated GET — for endpoints that ignore limit/page (e.g. the
+// per-issue comments list) and would make apiGetPaged spin to the page cap.
+async function apiGetOnce(cfg, token, path) {
+  const res = await fetch(`${apiBase(cfg)}/${path}`, {
+    headers: { Authorization: `token ${token}` },
+  });
+  if (!res.ok) throw new Error(`Gitea API ${res.status} ${res.statusText} on GET ${path}`);
+  return res.json();
+}
+
 async function apiSend(cfg, token, method, path, body) {
   const res = await fetch(`${apiBase(cfg)}/${path}`, {
     method,
@@ -135,7 +152,7 @@ function fetchIssues(cfg, token) {
 
 // gitea-mirror brings GitHub PRs across as issues; also real Gitea PRs surface
 // in the issues API with a non-null pull_request field. Treat all as "pulls".
-function isPull(item, cfg) {
+export function isPull(item, cfg) {
   if (item.pull_request) return true;
   const label = (cfg.mirror?.pullLabel || "pull-request").toLowerCase();
   if ((item.labels || []).some((l) => (l.name || "").toLowerCase() === label)) return true;
@@ -143,7 +160,7 @@ function isPull(item, cfg) {
   return typeof item.title === "string" && item.title.startsWith(prefix);
 }
 
-function slugify(title) {
+export function slugify(title) {
   return String(title)
     .replace(/^\[(GH-ISSUE|PR)\s*#\d+\]\s*/i, "") // drop the cross-ref prefix
     .replace(/^\[MERGED\]\s*/i, "")
@@ -154,11 +171,11 @@ function slugify(title) {
     .replace(/-+$/g, "") || "untitled";
 }
 
-function yamlSingleQuote(s) {
+export function yamlSingleQuote(s) {
   return `'${String(s).replace(/'/g, "''")}'`;
 }
 
-function renderMarkdown(item) {
+export function renderMarkdown(item) {
   const labels = (item.labels || []).map((l) => l.name).filter(Boolean);
   const fm = ["---", `title: ${yamlSingleQuote(item.title)}`];
   if (labels.length) {
@@ -174,11 +191,37 @@ function renderMarkdown(item) {
   return `${fm.join("\n")}\n${body}\n`;
 }
 
+// Comments are mirrored (when output.comments is true) into a read-only
+// sidecar next to each issue file — <index>-<slug>.comments.md — so the
+// issue file itself stays in the gh-issue-sync-compatible format.
+export function renderComments(item, comments) {
+  const parts = [`# Comments — #${item.number} ${item.title}`.trimEnd(), ""];
+  for (const c of comments) {
+    const who = c.user?.login || c.user?.username || "unknown";
+    parts.push(`## @${who} — ${c.created_at || "?"}`, "", normBody(c.body), "");
+  }
+  return parts.join("\n").replace(/\n*$/, "\n");
+}
+
+function commentsFileFor(issueFile) {
+  return issueFile.replace(/\.md$/, ".comments.md");
+}
+
+function countMirror(outDir) {
+  const count = (subs) =>
+    subs.reduce((n, s) => {
+      const d = join(outDir, s);
+      if (!existsSync(d)) return n;
+      return n + readdirSync(d).filter((f) => f.endsWith(".md") && !f.endsWith(".comments.md")).length;
+    }, 0);
+  return { issues: count(["open", "closed"]), pulls: count(["pulls/open", "pulls/closed"]) };
+}
+
 // ---------------------------------------------------------------------------
 // Local mirror read-back (status / diff / push)
 // ---------------------------------------------------------------------------
 
-function normBody(s) {
+export function normBody(s) {
   return String(s || "").replace(/\r\n/g, "\n").replace(/\s*$/, "");
 }
 
@@ -192,9 +235,9 @@ function yamlUnquote(s) {
 // Parse the frontmatter subset this tool writes (title, labels, state,
 // state_reason). Tolerates hand edits: unquoted/double-quoted scalars,
 // `labels: []`, varying list indentation.
-function parseIssueFile(content, where) {
+export function parseIssueFile(content, where) {
   const m = content.match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!m) fail(`${where}: missing frontmatter`);
+  if (!m) throw new Error(`${where}: missing frontmatter`);
   const meta = { title: null, labels: [], state: "open", state_reason: null };
   let inLabels = false;
   for (const line of m[1].split("\n")) {
@@ -213,7 +256,7 @@ function parseIssueFile(content, where) {
       meta[key] = raw === "" || raw === "null" ? null : yamlUnquote(raw);
     }
   }
-  if (!meta.title) fail(`${where}: missing title in frontmatter`);
+  if (!meta.title) throw new Error(`${where}: missing title in frontmatter`);
   if (meta.state !== "closed") meta.state = "open";
   // Drop the single blank separator line renderMarkdown writes after the
   // frontmatter; it's formatting, not body content.
@@ -229,7 +272,7 @@ function readLocalIssues(outDir) {
     const d = join(outDir, dir);
     if (!existsSync(d)) continue;
     for (const file of readdirSync(d).sort()) {
-      if (!file.endsWith(".md")) continue;
+      if (!file.endsWith(".md") || file.endsWith(".comments.md")) continue;
       const { meta, body } = parseIssueFile(readFileSync(join(d, file), "utf8"), `${dir}/${file}`);
       const num = file.match(/^(\d+)-/);
       out.push({ number: num ? Number(num[1]) : null, dir, file, meta, body });
@@ -244,7 +287,7 @@ function remoteLabelNames(item) {
 
 // Which fields differ between a local file and its remote issue. The
 // frontmatter `state` wins over folder placement (pull reorganizes folders).
-function diffFields(local, remote) {
+export function diffFields(local, remote) {
   const fields = [];
   if (local.meta.title !== remote.title) fields.push("title");
   const ll = [...local.meta.labels].sort().join("\n");
@@ -257,7 +300,7 @@ function diffFields(local, remote) {
 
 // A local entry shaped like an API item, so renderMarkdown() can produce the
 // canonical form of both sides (formatting-only edits don't count as drift).
-function localAsItem(l) {
+export function localAsItem(l) {
   return {
     title: l.meta.title,
     labels: l.meta.labels.map((name) => ({ name })),
@@ -304,7 +347,7 @@ function hasDrift(drift) {
 
 // Minimal LCS-based unified diff — enough for issue-sized texts, keeps the
 // zero-dependency promise. Returns null when the texts are identical.
-function unifiedDiff(aText, bText, aLabel, bLabel, context = 3) {
+export function unifiedDiff(aText, bText, aLabel, bLabel, context = 3) {
   if (aText === bText) return null;
   const a = aText.split("\n");
   const b = bText.split("\n");
@@ -368,50 +411,144 @@ function relForLog(absPath) {
   return rel && !rel.startsWith("..") ? rel : absPath;
 }
 
-async function cmdPull({ dryRun, configPath }) {
+function routeFor(item, cfg) {
+  const pull = isPull(item, cfg);
+  const state = item.state === "closed" ? "closed" : "open";
+  return { pull, dir: pull ? `pulls/${state}` : state, file: `${item.number}-${slugify(item.title)}.md` };
+}
+
+// The marker records provenance and the high-water timestamp incremental
+// pulls resume from. It lives inside the output dir, which is gitignored,
+// so the real instance URL never reaches tracked files.
+function writeSyncMarker(outDir, cfg, syncedAt) {
+  const counts = countMirror(outDir);
+  writeFileSync(
+    join(outDir, ".gitea-sync.json"),
+    JSON.stringify(
+      { source: `${cfg.gitea.owner}/${cfg.gitea.repo}`, url: cfg.gitea.url, issues: counts.issues, pulls: counts.pulls, syncedAt },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
+}
+
+// Timestamps come back RFC3339 but not always in the same zone notation, so
+// compare instants, not strings.
+function newerStamp(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return Date.parse(a) > Date.parse(b) ? a : b;
+}
+
+async function cmdPull({ dryRun, configPath, incremental }) {
   const cfgPath = findConfig(configPath);
   const cfg = loadConfig(cfgPath);
   const token = resolveToken(cfg.gitea.url);
   // output.dir is relative to the config file, so the mirror lands in the
   // same place no matter how deep in the repo the tool is invoked from.
   const outDir = resolve(dirname(cfgPath), cfg.output?.dir || ".issues-tea");
+  const withComments = cfg.output?.comments === true;
+  if (incremental) return pullIncremental(cfg, token, outDir, { dryRun, withComments });
 
   process.stdout.write(`Fetching issues from ${cfg.gitea.url} (${cfg.gitea.owner}/${cfg.gitea.repo}) …\n`);
   const items = await fetchIssues(cfg, token);
 
-  // Managed subfolders — wiped and rewritten each pull (Gitea is the source of
-  // truth; this keeps deletions/renames from leaving stale files behind).
-  const managed = ["open", "closed", "pulls/open", "pulls/closed"];
-  const plan = []; // { dir, file, content }
-  let nIssue = 0, nPull = 0;
-  for (const item of items) {
-    const pull = isPull(item, cfg);
-    const state = item.state === "closed" ? "closed" : "open";
-    const dir = pull ? `pulls/${state}` : state;
-    const file = `${item.number}-${slugify(item.title)}.md`;
-    plan.push({ dir, file, content: renderMarkdown(item) });
-    if (pull) nPull++; else nIssue++;
+  // One paginated call for the whole repo's comments, grouped by issue.
+  const commentsByIssue = new Map();
+  if (withComments) {
+    process.stdout.write("Fetching comments …\n");
+    for (const c of await apiGetPaged(cfg, token, `${repoPath(cfg)}/issues/comments`)) {
+      const num = Number((c.issue_url || "").split("/").pop());
+      if (!Number.isFinite(num) || num <= 0) continue;
+      if (!commentsByIssue.has(num)) commentsByIssue.set(num, []);
+      commentsByIssue.get(num).push(c);
+    }
   }
 
+  const plan = []; // { dir, file, content }
+  let nIssue = 0, nPull = 0, nComments = 0, syncedAt = null;
+  for (const item of items) {
+    syncedAt = newerStamp(item.updated_at, syncedAt);
+    const { pull, dir, file } = routeFor(item, cfg);
+    plan.push({ dir, file, content: renderMarkdown(item) });
+    if (pull) nPull++; else nIssue++;
+    const comments = commentsByIssue.get(item.number);
+    if (comments?.length) {
+      plan.push({ dir, file: commentsFileFor(file), content: renderComments(item, comments) });
+      nComments += comments.length;
+    }
+  }
+  const commentNote = withComments ? ` (+${nComments} comments)` : "";
+
   if (dryRun) {
-    process.stdout.write(`[dry-run] ${items.length} items → ${nIssue} issues + ${nPull} pulls into ${cfg.output.dir}/\n`);
+    process.stdout.write(`[dry-run] ${items.length} items → ${nIssue} issues + ${nPull} pulls${commentNote} into ${cfg.output.dir}/\n`);
     const sample = plan.slice(0, 3).map((p) => `  ${p.dir}/${p.file}`).join("\n");
     process.stdout.write(`sample:\n${sample}\n`);
     return;
   }
 
-  for (const sub of managed) rmSync(join(outDir, sub), { recursive: true, force: true });
-  for (const sub of managed) mkdirSync(join(outDir, sub), { recursive: true });
+  // Managed subfolders — wiped and rewritten each full pull (Gitea is the
+  // source of truth; this keeps deletions/renames from leaving stale files).
+  for (const sub of MANAGED_DIRS) rmSync(join(outDir, sub), { recursive: true, force: true });
+  for (const sub of MANAGED_DIRS) mkdirSync(join(outDir, sub), { recursive: true });
   for (const { dir, file, content } of plan) {
     writeFileSync(join(outDir, dir, file), content, "utf8");
   }
-  // .gitea-sync marker so the folder's provenance is obvious.
-  writeFileSync(
-    join(outDir, ".gitea-sync.json"),
-    JSON.stringify({ source: `${cfg.gitea.owner}/${cfg.gitea.repo}`, url: cfg.gitea.url, issues: nIssue, pulls: nPull }, null, 2) + "\n",
-    "utf8",
+  writeSyncMarker(outDir, cfg, syncedAt || new Date().toISOString());
+  process.stdout.write(`Wrote ${nIssue} issues + ${nPull} pulls${commentNote} to ${relForLog(outDir)}/\n`);
+}
+
+// Incremental pull: only issues updated since the marker's high-water mark.
+// Renames/moves are handled by dropping every file for the issue number
+// first; remote DELETIONS are invisible to the since-feed, so a periodic
+// full pull is still the way to reap those.
+async function pullIncremental(cfg, token, outDir, { dryRun, withComments }) {
+  const markerPath = join(outDir, ".gitea-sync.json");
+  if (!existsSync(markerPath)) fail(`no sync marker in ${relForLog(outDir)}/ — run a full pull first`);
+  const marker = JSON.parse(readFileSync(markerPath, "utf8"));
+  if (!marker.syncedAt) fail("sync marker predates incremental support — run a full pull first");
+
+  process.stdout.write(`Fetching issues updated since ${marker.syncedAt} …\n`);
+  const items = await apiGetPaged(
+    cfg,
+    token,
+    `${repoPath(cfg)}/issues?state=all&type=issues&since=${encodeURIComponent(marker.syncedAt)}`,
   );
-  process.stdout.write(`Wrote ${nIssue} issues + ${nPull} pulls to ${relForLog(outDir)}/\n`);
+  if (!items.length) {
+    process.stdout.write("up to date\n");
+    return;
+  }
+  if (dryRun) {
+    for (const item of items) {
+      const { dir, file } = routeFor(item, cfg);
+      process.stdout.write(`[dry-run] would update ${dir}/${file}\n`);
+    }
+    return;
+  }
+
+  let syncedAt = marker.syncedAt;
+  for (const item of items) {
+    syncedAt = newerStamp(item.updated_at, syncedAt);
+    const { dir, file } = routeFor(item, cfg);
+    for (const sub of MANAGED_DIRS) {
+      const d = join(outDir, sub);
+      if (!existsSync(d)) continue;
+      for (const f of readdirSync(d)) {
+        if (f.startsWith(`${item.number}-`)) rmSync(join(d, f));
+      }
+    }
+    mkdirSync(join(outDir, dir), { recursive: true });
+    writeFileSync(join(outDir, dir, file), renderMarkdown(item), "utf8");
+    if (withComments && item.comments > 0) {
+      const comments = await apiGetOnce(cfg, token, `${repoPath(cfg)}/issues/${item.number}/comments`);
+      if (Array.isArray(comments) && comments.length) {
+        writeFileSync(join(outDir, dir, commentsFileFor(file)), renderComments(item, comments), "utf8");
+      }
+    }
+  }
+  writeSyncMarker(outDir, cfg, syncedAt);
+  process.stdout.write(`Updated ${items.length} item(s) in ${relForLog(outDir)}/ (remote deletions need a full pull)\n`);
 }
 
 // status — list local-vs-remote drift. Exits 1 when anything drifts, so it
@@ -553,30 +690,40 @@ function fail(msg) {
   process.exit(1);
 }
 
-const HELP = `tea-issue-sync — mirror Gitea issues to local Markdown (a gh-issue-sync counterpart)
+const HELP = `tea-issue-sync ${VERSION} — mirror Gitea issues to local Markdown (a gh-issue-sync counterpart)
 
 Usage:
-  tea-issue-sync pull [--dry-run] [--config <path>]   Mirror Gitea → output folder (wipes managed subfolders)
+  tea-issue-sync pull [--incremental] [--dry-run] [--config <path>]
+                                                      Mirror Gitea → output folder. Full pull wipes the
+                                                      managed subfolders; --incremental only rewrites
+                                                      issues updated since the last sync (deletions
+                                                      still need a full pull)
   tea-issue-sync status [--config <path>]             List local-vs-remote drift (exit 1 when drifted)
   tea-issue-sync diff [--config <path>]               Unified diff of the drift, remote → local
   tea-issue-sync push [--dry-run] [--config <path>]   Push local edits; create issues from number-less files
-  tea-issue-sync --help
+  tea-issue-sync --help | --version
 
 Config: --config <path>, else the nearest config.json from the cwd up to the git root
-        (config.local.json next to it overrides per section; output.dir is relative to the config file)
+        (config.local.json next to it overrides per section; output.dir is relative to the config file).
+        Set output.comments=true to mirror comments into <index>-<slug>.comments.md sidecars.
 Token:  $GITEA_TOKEN or tea's config.yml
 Roadmap: see ROADMAP.md.`;
 
-const [cmd, ...rest] = process.argv.slice(2);
-const dryRun = rest.includes("--dry-run");
-const configFlag = rest.indexOf("--config");
-const configPath = configFlag !== -1 ? rest[configFlag + 1] : null;
-if (configFlag !== -1 && !configPath) fail("--config requires a path");
-const commands = { pull: cmdPull, status: cmdStatus, diff: cmdDiff, push: cmdPush };
-if (commands[cmd]) {
-  commands[cmd]({ dryRun, configPath }).catch((e) => fail(e?.message || String(e)));
-} else if (cmd === "--help" || cmd === "-h" || !cmd) {
-  process.stdout.write(HELP + "\n");
-} else {
-  fail(`unknown command '${cmd}' (try --help)`);
+if (!process.env.TEA_ISSUE_SYNC_AS_LIB) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  const dryRun = rest.includes("--dry-run");
+  const incremental = rest.includes("--incremental");
+  const configFlag = rest.indexOf("--config");
+  const configPath = configFlag !== -1 ? rest[configFlag + 1] : null;
+  if (configFlag !== -1 && !configPath) fail("--config requires a path");
+  const commands = { pull: cmdPull, status: cmdStatus, diff: cmdDiff, push: cmdPush };
+  if (commands[cmd]) {
+    commands[cmd]({ dryRun, configPath, incremental }).catch((e) => fail(e?.message || String(e)));
+  } else if (cmd === "--version" || cmd === "-v") {
+    process.stdout.write(`tea-issue-sync ${VERSION}\n`);
+  } else if (cmd === "--help" || cmd === "-h" || !cmd) {
+    process.stdout.write(HELP + "\n");
+  } else {
+    fail(`unknown command '${cmd}' (try --help)`);
+  }
 }
