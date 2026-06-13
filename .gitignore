@@ -7,15 +7,15 @@
 .env
 .env.*
 
-# Per-machine config overrides (planned; see roadmap).
+# Per-machine config overrides (real instance URL lives here, not in config.json).
 config.local.json
 
-# Node. Zero runtime deps today — this covers future dev tooling.
-node_modules/
-npm-debug.log*
-
-# Compiled binaries (./build.sh)
+# Compiled binaries (make build / make dist)
 dist/
+/tea-issue-sync
+
+# Stray bun compile artifacts (from the pre-Go prototype)
+*.bun-build
 
 # Claude Code workspace
 .claude/worktrees/

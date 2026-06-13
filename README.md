@@ -13,8 +13,8 @@ push the edits back.
 
 `pull` (Gitea → local, full or incremental), `status` / `diff` (drift
 inspection) and `push` (local → Gitea) are implemented; see
-[ROADMAP.md](ROADMAP.md). Ships as a self-contained binary (no runtime
-needed) or runs from source on Node 18+ with zero dependencies.
+[ROADMAP.md](ROADMAP.md). A single native binary written in Go — no runtime
+to install, no dependencies beyond the standard library.
 
 ## What it does
 
@@ -40,34 +40,38 @@ tool can move independently of any particular repo's mirror.
 
 ## Install
 
-Download a binary from the repo's **releases** page — it's self-contained,
-no Node required:
+Any one of:
 
 ```bash
-curl -fL -o /usr/local/bin/tea-issue-sync \
-  "https://<your-gitea>/TheUltimateLazyDev/tea-issue-sync/releases/download/v1.0.0/tea-issue-sync-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')"
-chmod +x /usr/local/bin/tea-issue-sync
+# 1. Prebuilt binary (no toolchain needed)
+curl -fsSL https://raw.githubusercontent.com/theultimatelazydev/tea-issue-sync/main/install.sh | sh
+
+# 2. With the Go toolchain
+go install github.com/theultimatelazydev/tea-issue-sync/cmd/tea-issue-sync@latest
+
+# 3. From a clone
+make install        # → $GOBIN, or: make build → ./dist/tea-issue-sync
 ```
 
-Or skip installing and run from source with Node 18+ (zero dependencies):
-`node tea-issue-sync.mjs …`. To build binaries yourself you need
-[bun](https://bun.sh): `./build.sh` for the current platform, or
-`./build.sh --all` for darwin/linux × arm64/x64 into `dist/`.
+`install.sh` grabs the right binary for your OS/arch from the latest GitHub
+release; point it elsewhere with `TEA_ISSUE_SYNC_BASE_URL` or pass a target
+path as its first argument.
 
 ## Usage
 
 ```bash
-node tea-issue-sync.mjs pull                 # mirror Gitea → <output>/ (full rewrite)
-node tea-issue-sync.mjs pull --incremental   # only issues updated since the last sync
-node tea-issue-sync.mjs pull --dry-run       # counts + a sample, writes nothing
-node tea-issue-sync.mjs status               # list local-vs-remote drift (exit 1 if any)
-node tea-issue-sync.mjs diff                 # unified diff of the drift, remote → local
-node tea-issue-sync.mjs push                 # push local edits / new files to Gitea
-node tea-issue-sync.mjs push --dry-run       # show what push would do
-node tea-issue-sync.mjs --help               # also: --version
+tea-issue-sync pull                 # mirror Gitea → <output>/ (full rewrite)
+tea-issue-sync pull --incremental   # only issues updated since the last sync
+tea-issue-sync pull --dry-run       # counts + a sample, writes nothing
+tea-issue-sync status               # list local-vs-remote drift (exit 1 if any)
+tea-issue-sync diff                 # unified diff of the drift, remote → local
+tea-issue-sync push                 # push local edits / new files to Gitea
+tea-issue-sync push --dry-run       # show what push would do
+tea-issue-sync --help               # also: --version
 ```
 
-Every command accepts `--config <path>` (see below).
+Every command accepts `--config <path>` (see below). Without installing, run
+from a clone with `go run ./cmd/tea-issue-sync <command>`.
 
 An incremental pull resumes from the `syncedAt` high-water mark in
 `.gitea-sync.json` and rewrites only what changed (handling renames and
@@ -171,17 +175,22 @@ between the two.
 ## Development
 
 ```bash
-node --test tea-issue-sync.test.mjs
+make test     # go test ./...   (pure-helper suite, stdlib only)
+make vet
+make build    # → dist/tea-issue-sync
+make dist     # cross-compile darwin/linux × amd64/arm64 into dist/
 ```
 
-Zero dependencies — the suite uses Node's built-in `node:test`. CI runs it
-via [`.gitea/workflows/test.yml`](.gitea/workflows/test.yml) (needs a
-registered Gitea Actions runner).
+The logic lives in `internal/teasync` (unit-tested); `cmd/tea-issue-sync` is
+a thin CLI. CI runs vet + tests on both [Gitea](.gitea/workflows/test.yml)
+(needs a registered Actions runner) and [GitHub](.github/workflows/test.yml);
+tagging `v*` triggers [a GitHub release](.github/workflows/release.yml) that
+builds and attaches the binaries.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Done: phases 0–2 (pull incl. incremental and
-comments, status, diff, push, tests + CI). Next: standalone packaging.
+See [ROADMAP.md](ROADMAP.md). Done: phases 0–3 (full + incremental pull,
+comments, status, diff, push, tests + CI, native binary distribution).
 
 ## Credit
 
