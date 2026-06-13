@@ -418,16 +418,26 @@ func issueNumFromURL(u string) int64 {
 func Help() string {
 	return "tea-issue-sync " + Version + ` — mirror Gitea issues to local Markdown (a gh-issue-sync counterpart)
 
-Usage:
-  tea-issue-sync pull [--incremental] [--dry-run] [--config <path>]
-                                                      Mirror Gitea → output folder. Full pull wipes the
-                                                      managed subfolders; --incremental only rewrites
-                                                      issues updated since the last sync (deletions
-                                                      still need a full pull)
-  tea-issue-sync status [--config <path>]             List local-vs-remote drift (exit 1 when drifted)
-  tea-issue-sync diff [--config <path>]               Unified diff of the drift, remote → local
-  tea-issue-sync push [--dry-run] [--config <path>]   Push local edits; create issues from number-less files
+Sync (talk to Gitea):
+  tea-issue-sync pull [--incremental] [--dry-run]   Mirror Gitea → output folder. Full pull wipes the
+                                                    managed subfolders; --incremental only rewrites
+                                                    issues updated since the last sync (deletions
+                                                    still need a full pull)
+  tea-issue-sync status                             List local-vs-remote drift (exit 1 when drifted)
+  tea-issue-sync diff                               Unified diff of the drift, remote → local
+  tea-issue-sync push [--dry-run]                   Push local edits; create issues from number-less files
+
+Edit locally (no network; run push to sync):
+  tea-issue-sync new "Title" [--label L]... [--body TEXT] [--state open|closed] [--edit]
+                                                    Create a new issue file (push creates it on Gitea)
+  tea-issue-sync close <n> [--reason completed|not_planned]   Mark #n closed and move it to closed/
+  tea-issue-sync reopen <n>                         Mark #n open and move it to open/
+  tea-issue-sync list [--state open|closed|all] [--label L] [--search TEXT]
+                                                    List issues from the local mirror
+
   tea-issue-sync --help | --version
+
+Every command accepts --config <path>.
 
 Config: --config <path>, else the nearest config.json from the cwd up to the git root
         (config.local.json next to it overrides per section; output.dir is relative to the config file).
