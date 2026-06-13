@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	tea "github.com/theultimatelazydev/tea-issue-sync/internal/teasync"
 )
@@ -15,32 +16,44 @@ func fatal(msg string) {
 	os.Exit(1)
 }
 
+// flagValue returns the argument after index i, or fatals if it's missing.
+func flagValue(args []string, i int, flag string) string {
+	if i+1 >= len(args) {
+		fatal(flag + " requires a value")
+	}
+	return args[i+1]
+}
+
 func main() {
 	args := os.Args[1:]
 	cmd := ""
 	if len(args) > 0 {
 		cmd = args[0]
 	}
+	rest := args
+	if len(args) > 0 {
+		rest = args[1:]
+	}
 
-	dryRun := false
-	incremental := false
+	// --config is global to every command.
 	configPath := ""
-	for i, a := range args {
-		switch a {
-		case "--dry-run":
-			dryRun = true
-		case "--incremental":
-			incremental = true
-		case "--config":
-			if i+1 >= len(args) {
-				fatal("--config requires a path")
-			}
-			configPath = args[i+1]
+	for i, a := range rest {
+		if a == "--config" {
+			configPath = flagValue(rest, i, "--config")
 		}
 	}
 
 	switch cmd {
 	case "pull", "status", "diff", "push":
+		dryRun, incremental := false, false
+		for _, a := range rest {
+			switch a {
+			case "--dry-run":
+				dryRun = true
+			case "--incremental":
+				incremental = true
+			}
+		}
 		env, err := tea.Load(configPath)
 		if err != nil {
 			fatal(err.Error())
@@ -55,12 +68,92 @@ func main() {
 		case "push":
 			err = tea.Push(env, tea.PushOpts{DryRun: dryRun})
 		}
-		if err != nil {
-			if errors.Is(err, tea.ErrDrift) {
-				os.Exit(1)
+		exitOn(err)
+
+	case "new":
+		opts := tea.NewOpts{}
+		for i := 0; i < len(rest); i++ {
+			switch a := rest[i]; a {
+			case "--label":
+				opts.Labels = append(opts.Labels, flagValue(rest, i, a))
+				i++
+			case "--body":
+				opts.Body = flagValue(rest, i, a)
+				i++
+			case "--state":
+				opts.State = flagValue(rest, i, a)
+				i++
+			case "--config":
+				i++ // value handled globally
+			case "--edit":
+				opts.Edit = true
+			default:
+				if len(a) > 0 && a[0] != '-' && opts.Title == "" {
+					opts.Title = a
+				}
 			}
+		}
+		env, err := tea.LoadLocal(configPath)
+		if err != nil {
 			fatal(err.Error())
 		}
+		exitOn(tea.New(env, opts))
+
+	case "close", "reopen":
+		number, reason := int64(0), ""
+		for i := 0; i < len(rest); i++ {
+			switch a := rest[i]; a {
+			case "--reason":
+				reason = flagValue(rest, i, a)
+				i++
+			case "--config":
+				i++
+			default:
+				if len(a) > 0 && a[0] != '-' && number == 0 {
+					n, err := strconv.ParseInt(a, 10, 64)
+					if err != nil {
+						fatal(fmt.Sprintf("%s: expected an issue number, got %q", cmd, a))
+					}
+					number = n
+				}
+			}
+		}
+		if number == 0 {
+			fatal(cmd + " requires an issue number (e.g. tea-issue-sync " + cmd + " 42)")
+		}
+		env, err := tea.LoadLocal(configPath)
+		if err != nil {
+			fatal(err.Error())
+		}
+		if cmd == "close" {
+			exitOn(tea.Close(env, number, reason))
+		} else {
+			exitOn(tea.Reopen(env, number))
+		}
+
+	case "list":
+		opts := tea.ListOpts{}
+		for i := 0; i < len(rest); i++ {
+			switch a := rest[i]; a {
+			case "--state":
+				opts.State = flagValue(rest, i, a)
+				i++
+			case "--label":
+				opts.Label = flagValue(rest, i, a)
+				i++
+			case "--search":
+				opts.Search = flagValue(rest, i, a)
+				i++
+			case "--config":
+				i++
+			}
+		}
+		env, err := tea.LoadLocal(configPath)
+		if err != nil {
+			fatal(err.Error())
+		}
+		exitOn(tea.List(env, opts))
+
 	case "--version", "-v":
 		fmt.Printf("tea-issue-sync %s\n", tea.Version)
 	case "--help", "-h", "":
@@ -68,4 +161,14 @@ func main() {
 	default:
 		fatal(fmt.Sprintf("unknown command '%s' (try --help)", cmd))
 	}
+}
+
+func exitOn(err error) {
+	if err == nil {
+		return
+	}
+	if errors.Is(err, tea.ErrDrift) {
+		os.Exit(1)
+	}
+	fatal(err.Error())
 }

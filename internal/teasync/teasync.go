@@ -101,9 +101,10 @@ type Env struct {
 	Comments bool
 }
 
-// Load resolves the config (and token), builds a client, and computes the
-// absolute output directory.
-func Load(configPath string) (*Env, error) {
+// LoadLocal resolves the config and output directory but does NOT resolve a
+// token or build a client — for commands that only touch the local mirror
+// (new/close/reopen/list), which must work offline.
+func LoadLocal(configPath string) (*Env, error) {
 	cfgPath, err := findConfig(configPath)
 	if err != nil {
 		return nil, err
@@ -112,15 +113,26 @@ func Load(configPath string) (*Env, error) {
 	if err != nil {
 		return nil, err
 	}
-	token, err := resolveToken(cfg.Gitea.URL)
-	if err != nil {
-		return nil, err
-	}
 	outDir, err := outputDir(cfgPath, cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &Env{Cfg: cfg, Client: NewClient(cfg.Gitea.URL, token), OutDir: outDir, Comments: cfg.Output.Comments}, nil
+	return &Env{Cfg: cfg, OutDir: outDir, Comments: cfg.Output.Comments}, nil
+}
+
+// Load is LoadLocal plus a resolved token and an authenticated client — for
+// commands that hit the Gitea API (pull/status/diff/push).
+func Load(configPath string) (*Env, error) {
+	env, err := LoadLocal(configPath)
+	if err != nil {
+		return nil, err
+	}
+	token, err := resolveToken(env.Cfg.Gitea.URL)
+	if err != nil {
+		return nil, err
+	}
+	env.Client = NewClient(env.Cfg.Gitea.URL, token)
+	return env, nil
 }
 
 // Client is a thin authenticated Gitea API client (stdlib only).

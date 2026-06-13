@@ -60,6 +60,7 @@ path as its first argument.
 ## Usage
 
 ```bash
+# Sync (talk to Gitea)
 tea-issue-sync pull                 # mirror Gitea → <output>/ (full rewrite)
 tea-issue-sync pull --incremental   # only issues updated since the last sync
 tea-issue-sync pull --dry-run       # counts + a sample, writes nothing
@@ -67,11 +68,23 @@ tea-issue-sync status               # list local-vs-remote drift (exit 1 if any)
 tea-issue-sync diff                 # unified diff of the drift, remote → local
 tea-issue-sync push                 # push local edits / new files to Gitea
 tea-issue-sync push --dry-run       # show what push would do
+
+# Edit locally (no network; run push to sync)
+tea-issue-sync new "Title" --label bug --body "…"   # create an issue file
+tea-issue-sync close 42 --reason completed          # mark closed, move to closed/
+tea-issue-sync reopen 42                             # mark open, move to open/
+tea-issue-sync list --search login --state open      # list from the local mirror
+
 tea-issue-sync --help               # also: --version
 ```
 
 Every command accepts `--config <path>` (see below). Without installing, run
 from a clone with `go run ./cmd/tea-issue-sync <command>`.
+
+The `new`/`close`/`reopen`/`list` verbs are pure local-file convenience
+wrappers — they never touch Gitea. `new` writes a number-less file,
+`close`/`reopen` flip the frontmatter `state` and move the file; `push`
+remains the one command that syncs everything to Gitea.
 
 An incremental pull resumes from the `syncedAt` high-water mark in
 `.gitea-sync.json` and rewrites only what changed (handling renames and
