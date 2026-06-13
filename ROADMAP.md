@@ -34,18 +34,26 @@
 - [x] Mirror issue comments behind `output.comments` — read-only
       `<index>-<slug>.comments.md` sidecars, ignored by status/diff/push
 - [x] Test suite (18 tests on the pure helpers: slugs, YAML round-trip, PR
-      routing, drift detection, unified diff, comment rendering) via
-      `node --test`, plus a Gitea Actions workflow (needs a registered
-      runner)
+      routing, drift detection, unified diff, comment rendering), plus a
+      Gitea Actions workflow (needs a registered runner)
 
 ## Phase 3 — standalone distribution ✅
 
-- [x] Self-contained binaries via `bun build --compile` (`./build.sh`,
-      `--all` for darwin/linux × arm64/x64) — Node is no longer required to
-      run the tool; bun is a build-time dependency only
-- [x] Versioned releases on Gitea (binaries attached) + an install
-      one-liner in the README
-- [ ] Homebrew tap — deferred until the repo lands on its public host
+Originally prototyped as a `bun build --compile` of the JavaScript source.
+Superseded by a full **Go rewrite** for true parity with gh-issue-sync (also
+Go): a ~6 MB native binary instead of a ~70 MB embedded-runtime one, plus
+`go install`.
+
+- [x] Rewrite in Go — `cmd/tea-issue-sync` + `internal/teasync`, standard
+      library only; identical on-disk Markdown format (verified by a
+      byte-for-byte diff of a full pull against the JS implementation)
+- [x] Native binaries via `make dist` (darwin/linux × amd64/arm64), no
+      runtime required
+- [x] `go install …/cmd/tea-issue-sync@latest`, an `install.sh`, and a
+      GitHub Actions release workflow that builds + attaches binaries on tag
+      (so the binaries reach the GitHub mirror, which push-mirroring alone
+      does not carry)
+- [ ] Homebrew tap — deferred until the repo settles on its public host
 
 ## Later / ideas
 
