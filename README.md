@@ -200,5 +200,7 @@ its design — this project carries them over to Gitea.
 
 ## License
 
-Apache-2.0. Like `gh-issue-sync`: this code is entirely LLM generated. It is
+Apache-2.0.
+
+Like `gh-issue-sync`: this code is entirely LLM generated. It is
 unclear if LLM generated code can be copyrighted.
