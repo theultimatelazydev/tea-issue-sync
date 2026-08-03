@@ -123,25 +123,35 @@ Conventions:
 
 ## Configuration & auth
 
-`config.json` defines the target and output. It is resolved per *invocation*,
-not per install: `--config <path>` if given, otherwise the nearest
-`config.json` walking up from the current directory (stopping at the git
-root). A `config.local.json` next to the chosen config overrides it per
-top-level section — useful for per-machine URLs without touching the tracked
-file. `output.dir` is relative to the config file's directory, so the mirror
-lands in the same place no matter where in the repo you invoke the tool from.
+**Config is optional.** Run `tea-issue-sync` inside a git repo whose `origin`
+remote points at the Gitea repo and it infers everything — the instance URL,
+owner, and repo — from that remote. No config file required.
 
-The `config.json` tracked in this repo holds placeholder values: either edit
-it in your own checkout, or leave it and put your real instance in a
-(gitignored) `config.local.json` next to it.
+Add a `config.json` only to override a default:
 
 ```json
 {
-  "gitea":  { "url": "https://gitea.example.com", "owner": "me", "repo": "my-repo" },
+  "gitea":  { "url": "https://gitea.example.com", "owner": "me", "repo": "my-repo", "remote": "origin" },
   "output": { "dir": ".issues-tea", "comments": false },
   "mirror": { "pullLabel": "pull-request", "pullTitlePrefix": "[PR #" }
 }
 ```
+
+Every field is optional and only overrides what's otherwise inferred or
+defaulted:
+
+- `gitea.url` / `owner` / `repo` — point at a different repo than the origin
+  remote (explicit values win over inference).
+- `gitea.remote` — infer from a remote other than `origin`.
+- `output.dir` — where the mirror lands (default `.issues-tea`).
+- `output.comments` — mirror comments into `<index>-<slug>.comments.md`.
+- `mirror.*` — how PR-mirror items are recognized.
+
+Config is resolved per *invocation*: `--config <path>` if given, else the
+nearest `config.json` from the cwd up to the git root, with an optional
+`config.local.json` overlay next to it (per-field, e.g. for a per-machine URL
+you don't want tracked). `output.dir` is relative to the config file, or the
+git root when there's no config.
 
 The API token is resolved at runtime and **never stored in config or printed**:
 `$GITEA_TOKEN` first, otherwise the matching login's token from the

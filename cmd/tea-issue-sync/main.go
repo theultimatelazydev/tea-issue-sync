@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	tea "github.com/theultimatelazydev/tea-issue-sync/internal/teasync"
+	"github.com/theultimatelazydev/tea-issue-sync/skill"
 )
 
 func fatal(msg string) {
@@ -153,6 +155,47 @@ func main() {
 			fatal(err.Error())
 		}
 		exitOn(tea.List(env, opts))
+
+	case "skill":
+		sub := ""
+		if len(rest) > 0 {
+			sub = rest[0]
+		}
+		switch sub {
+		case "print":
+			fmt.Print(skill.Content)
+		case "install", "":
+			project := false
+			dir := ""
+			for i := 0; i < len(rest); i++ {
+				switch rest[i] {
+				case "--project":
+					project = true
+				case "--dir":
+					dir = flagValue(rest, i, "--dir")
+					i++
+				}
+			}
+			base := dir
+			if base == "" {
+				if project {
+					base = filepath.Join(".claude", "skills")
+				} else {
+					home, err := os.UserHomeDir()
+					if err != nil {
+						fatal(err.Error())
+					}
+					base = filepath.Join(home, ".claude", "skills")
+				}
+			}
+			path, err := skill.Install(base)
+			if err != nil {
+				fatal(err.Error())
+			}
+			fmt.Printf("installed skill → %s\n", path)
+		default:
+			fatal("skill: unknown subcommand '" + sub + "' (use: install [--project] [--dir <path>] | print)")
+		}
 
 	case "--version", "-v":
 		fmt.Printf("tea-issue-sync %s\n", tea.Version)

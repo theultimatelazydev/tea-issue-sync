@@ -13,13 +13,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 // Version is overridable at build time via
 // -ldflags "-X github.com/theultimatelazydev/tea-issue-sync/internal/teasync.Version=...".
-var Version = "1.1.0"
+var Version = "1.2.0"
 
 // MANAGED_DIRS are wiped and rewritten on every full pull (Gitea is the
 // source of truth), so renames and deletions there don't leave stale files.
@@ -29,9 +30,10 @@ var managedDirs = []string{"open", "closed", "pulls/open", "pulls/closed"}
 // already-populated value gives per-field overrides for free.
 type Config struct {
 	Gitea struct {
-		URL   string `json:"url"`
-		Owner string `json:"owner"`
-		Repo  string `json:"repo"`
+		URL    string `json:"url"`
+		Owner  string `json:"owner"`
+		Repo   string `json:"repo"`
+		Remote string `json:"remote"` // git remote to infer from when fields are omitted (default "origin")
 	} `json:"gitea"`
 	Output struct {
 		Dir      string `json:"dir"`
@@ -103,17 +105,14 @@ type Env struct {
 
 // LoadLocal resolves the config and output directory but does NOT resolve a
 // token or build a client — for commands that only touch the local mirror
-// (new/close/reopen/list), which must work offline.
+// (new/close/reopen/list), which must work offline. config.json is optional:
+// gitea.url/owner/repo are inferred from the git remote when absent.
 func LoadLocal(configPath string) (*Env, error) {
-	cfgPath, err := findConfig(configPath)
+	cfg, anchor, err := resolveConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := loadConfig(cfgPath)
-	if err != nil {
-		return nil, err
-	}
-	outDir, err := outputDir(cfgPath, cfg)
+	outDir, err := filepath.Abs(filepath.Join(anchor, cfg.Output.Dir))
 	if err != nil {
 		return nil, err
 	}

@@ -435,13 +435,20 @@ Edit locally (no network; run push to sync):
   tea-issue-sync list [--state open|closed|all] [--label L] [--search TEXT]
                                                     List issues from the local mirror
 
+Agent setup:
+  tea-issue-sync skill install [--project] [--dir <path>]   Install the agent skill (default ~/.claude/skills/)
+  tea-issue-sync skill print                                Print the embedded SKILL.md to stdout
+
   tea-issue-sync --help | --version
 
 Every command accepts --config <path>.
 
-Config: --config <path>, else the nearest config.json from the cwd up to the git root
-        (config.local.json next to it overrides per section; output.dir is relative to the config file).
-        Set output.comments=true to mirror comments into <index>-<slug>.comments.md sidecars.
+Config: OPTIONAL. In a git repo whose origin points at the Gitea repo, the URL,
+        owner, and repo are inferred from the remote — no config file needed.
+        Add a config.json (nearest one from the cwd up to the git root, with an
+        optional config.local.json overlay) only to override the inferred repo,
+        pick a different remote (gitea.remote), change output.dir, or set
+        output.comments=true (mirror comments into <index>-<slug>.comments.md).
 Token:  $GITEA_TOKEN or tea's config.yml
 Roadmap: see ROADMAP.md.`
 }

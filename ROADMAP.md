@@ -55,6 +55,16 @@ Go): a ~6 MB native binary instead of a ~70 MB embedded-runtime one, plus
       does not carry)
 - [ ] Homebrew tap — deferred until the repo settles on its public host
 
+## Phase 4 — agent ergonomics ✅
+
+- [x] Local convenience verbs `new` / `close` / `reopen` / `list` (no network)
+- [x] Embedded agent skill (`skill/SKILL.md` via `go:embed`) + `skill install`
+      / `skill print`; `AGENTS.md` / `CLAUDE.md` for contributors
+- [x] Zero-config: `gitea.url` / `owner` / `repo` are inferred from the git
+      `origin` remote, so `config.json` is optional (override-only)
+- [x] `install.sh` installs to `~/.local/bin` (no sudo) and warns if it's not
+      on PATH
+
 ## Later / ideas
 
 - Conflict-aware push (compare against a pulled base snapshot to detect

@@ -15,8 +15,9 @@ func pathExists(p string) bool {
 	return err == nil
 }
 
-// findConfig resolves the config file: an explicit path, else the nearest
-// config.json walking up from the cwd, stopping at the git root.
+// findConfig locates an optional config file. An explicit path that doesn't
+// exist is an error; otherwise it returns the nearest config.json walking up
+// from the cwd to the git root, or "" (no error) when there is none.
 func findConfig(explicit string) (string, error) {
 	if explicit != "" {
 		p, err := filepath.Abs(explicit)
@@ -39,16 +40,35 @@ func findConfig(explicit string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if pathExists(filepath.Join(dir, ".git")) || parent == dir {
-			break
+			return "", nil
 		}
 		dir = parent
 	}
-	return "", errors.New("no config.json found between the cwd and the git root; pass --config <path>")
 }
 
-// loadConfig reads config.json, overlays config.local.json (per-field), then
-// applies defaults and validates.
-func loadConfig(configPath string) (*Config, error) {
+// gitRoot returns the nearest ancestor of the cwd that contains a .git entry,
+// or "" if the cwd is not inside a git repository.
+func gitRoot() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if pathExists(filepath.Join(dir, ".git")) {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// loadConfigFile parses config.json and overlays config.local.json (per
+// field). It does NOT apply defaults or validate — callers do that after
+// merging in any values inferred from the git remote.
+func loadConfigFile(configPath string) (*Config, error) {
 	cfg := &Config{}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -63,12 +83,14 @@ func loadConfig(configPath string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Unmarshaling onto the populated struct overrides only the fields
-		// present in the local file (the per-section override behaviour).
 		if err := json.Unmarshal(ld, cfg); err != nil {
 			return nil, fmt.Errorf("%s: %w", localPath, err)
 		}
 	}
+	return cfg, nil
+}
+
+func applyDefaults(cfg *Config) {
 	if cfg.Output.Dir == "" {
 		cfg.Output.Dir = ".issues-tea"
 	}
@@ -78,16 +100,6 @@ func loadConfig(configPath string) (*Config, error) {
 	if cfg.Mirror.PullTitlePrefix == "" {
 		cfg.Mirror.PullTitlePrefix = "[PR #"
 	}
-	if cfg.Gitea.URL == "" || cfg.Gitea.Owner == "" || cfg.Gitea.Repo == "" {
-		return nil, fmt.Errorf("%s missing gitea.url / gitea.owner / gitea.repo", configPath)
-	}
-	return cfg, nil
-}
-
-// outputDir resolves output.dir relative to the config file's directory, so
-// the mirror lands in the same place regardless of the invocation cwd.
-func outputDir(configPath string, cfg *Config) (string, error) {
-	return filepath.Abs(filepath.Join(filepath.Dir(configPath), cfg.Output.Dir))
 }
 
 var (
@@ -115,8 +127,6 @@ func resolveToken(giteaURL string) (string, error) {
 		if err != nil {
 			continue
 		}
-		// Light line-scan: pair each url: with the nearest token:; prefer the
-		// login whose url matches our host.
 		var curURL, firstToken, matchToken string
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimRight(line, "\r")
@@ -141,4 +151,55 @@ func resolveToken(giteaURL string) (string, error) {
 		}
 	}
 	return "", errors.New("no token: set $GITEA_TOKEN or log in with `tea login add`")
+}
+
+// resolveConfig produces the final Config and the directory the output folder
+// is anchored to. Precedence for gitea.url/owner/repo: explicit config values
+// win; anything omitted is inferred from the git remote. config.json is
+// optional — a git repo whose origin is the Gitea repo needs none.
+func resolveConfig(configPath string) (*Config, string, error) {
+	cfgPath, err := findConfig(configPath)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg := &Config{}
+	anchor := ""
+	if cfgPath != "" {
+		cfg, err = loadConfigFile(cfgPath)
+		if err != nil {
+			return nil, "", err
+		}
+		anchor = filepath.Dir(cfgPath)
+	}
+
+	root := gitRoot()
+	if cfg.Gitea.URL == "" || cfg.Gitea.Owner == "" || cfg.Gitea.Repo == "" {
+		if root != "" {
+			u, o, r := inferGiteaFromRemote(root, cfg.Gitea.Remote)
+			if cfg.Gitea.URL == "" {
+				cfg.Gitea.URL = u
+			}
+			if cfg.Gitea.Owner == "" {
+				cfg.Gitea.Owner = o
+			}
+			if cfg.Gitea.Repo == "" {
+				cfg.Gitea.Repo = r
+			}
+		}
+	}
+	applyDefaults(cfg)
+
+	if cfg.Gitea.URL == "" || cfg.Gitea.Owner == "" || cfg.Gitea.Repo == "" {
+		return nil, "", errors.New("could not determine the Gitea repo: no config.json with gitea.url/owner/repo, and no git remote 'origin' to infer from. Add a config.json or run inside a git repo whose origin points at the Gitea repo")
+	}
+
+	if anchor == "" {
+		anchor = root
+	}
+	if anchor == "" {
+		if anchor, err = os.Getwd(); err != nil {
+			return nil, "", err
+		}
+	}
+	return cfg, anchor, nil
 }
