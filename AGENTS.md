@@ -39,6 +39,9 @@ command set and file format.
 
 ## Releases
 
+- Add a `## [X.Y.Z] - DATE` section to `CHANGELOG.md` and bump
+  `teasync.Version` before tagging. The release workflow extracts that
+  section for the GitHub release notes.
 - Tag `vX.Y.Z` on `main`; the GitHub Actions release workflow builds and
   attaches the binaries. The push mirror is scheduled, so force a sync after
   tagging if you need it on GitHub immediately.

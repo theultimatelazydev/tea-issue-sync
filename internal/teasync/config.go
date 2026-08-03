@@ -192,6 +192,9 @@ func resolveConfig(configPath string) (*Config, string, error) {
 	if cfg.Gitea.URL == "" || cfg.Gitea.Owner == "" || cfg.Gitea.Repo == "" {
 		return nil, "", errors.New("could not determine the Gitea repo: no config.json with gitea.url/owner/repo, and no git remote 'origin' to infer from. Add a config.json or run inside a git repo whose origin points at the Gitea repo")
 	}
+	if hint := nonGiteaHint(cfg.Gitea.URL); hint != "" {
+		return nil, "", errors.New(hint)
+	}
 
 	if anchor == "" {
 		anchor = root

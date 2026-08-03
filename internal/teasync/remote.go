@@ -1,10 +1,32 @@
 package teasync
 
 import (
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
 )
+
+// nonGiteaHint returns a helpful message when the resolved instance URL is a
+// well-known host that isn't Gitea, so users pointed at the wrong tool (most
+// often a GitHub repo) get a clear pointer instead of an opaque API error.
+// Empty string means "looks fine, proceed" — self-hosted Gitea on any domain
+// passes through untouched.
+func nonGiteaHint(giteaURL string) string {
+	host := ""
+	if u, err := url.Parse(giteaURL); err == nil {
+		host = strings.ToLower(u.Hostname())
+	}
+	switch {
+	case host == "github.com" || strings.HasSuffix(host, ".github.com"):
+		return "this looks like a GitHub repo (" + giteaURL + "). tea-issue-sync syncs Gitea issues — for GitHub use gh-issue-sync (github.com/mitsuhiko/gh-issue-sync). If your Gitea repo is elsewhere, set gitea.url/owner/repo in a config.json."
+	case host == "gitlab.com":
+		return "this looks like a GitLab repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a config.json."
+	case host == "bitbucket.org":
+		return "this looks like a Bitbucket repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a config.json."
+	}
+	return ""
+}
 
 // Parse the two remote URL shapes Gitea hands out. HTTP(S) is exact; for SSH
 // remotes the web/API host is assumed to be https://<host> (the port and
