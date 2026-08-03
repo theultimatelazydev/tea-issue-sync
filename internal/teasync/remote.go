@@ -19,11 +19,11 @@ func nonGiteaHint(giteaURL string) string {
 	}
 	switch {
 	case host == "github.com" || strings.HasSuffix(host, ".github.com"):
-		return "this looks like a GitHub repo (" + giteaURL + "). tea-issue-sync syncs Gitea issues — for GitHub use gh-issue-sync (github.com/mitsuhiko/gh-issue-sync). If your Gitea repo is elsewhere, set gitea.url/owner/repo in a config.json."
+		return "this looks like a GitHub repo (" + giteaURL + "). tea-issue-sync syncs Gitea issues — for GitHub use gh-issue-sync (github.com/mitsuhiko/gh-issue-sync). If your Gitea repo is elsewhere, set gitea.url/owner/repo in a .tea-issue-sync.json."
 	case host == "gitlab.com":
-		return "this looks like a GitLab repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a config.json."
+		return "this looks like a GitLab repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a .tea-issue-sync.json."
 	case host == "bitbucket.org":
-		return "this looks like a Bitbucket repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a config.json."
+		return "this looks like a Bitbucket repo (" + giteaURL + "). tea-issue-sync only speaks the Gitea API — point it at a Gitea repo, or set gitea.url/owner/repo in a .tea-issue-sync.json."
 	}
 	return ""
 }

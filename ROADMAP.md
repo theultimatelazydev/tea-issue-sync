@@ -61,7 +61,9 @@ Go): a ~6 MB native binary instead of a ~70 MB embedded-runtime one, plus
 - [x] Embedded agent skill (`skill/SKILL.md` via `go:embed`) + `skill install`
       / `skill print`; `AGENTS.md` / `CLAUDE.md` for contributors
 - [x] Zero-config: `gitea.url` / `owner` / `repo` are inferred from the git
-      `origin` remote, so `config.json` is optional (override-only)
+      `origin` remote, so config is optional (override-only). The optional
+      file is `.tea-issue-sync.json` (tool-specific, never a generic
+      `config.json`)
 - [x] `install.sh` installs to `~/.local/bin` (no sudo) and warns if it's not
       on PATH
 

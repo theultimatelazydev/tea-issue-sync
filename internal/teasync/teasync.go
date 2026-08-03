@@ -20,13 +20,13 @@ import (
 
 // Version is overridable at build time via
 // -ldflags "-X github.com/theultimatelazydev/tea-issue-sync/internal/teasync.Version=...".
-var Version = "1.2.1"
+var Version = "1.3.0"
 
 // MANAGED_DIRS are wiped and rewritten on every full pull (Gitea is the
 // source of truth), so renames and deletions there don't leave stale files.
 var managedDirs = []string{"open", "closed", "pulls/open", "pulls/closed"}
 
-// Config mirrors config.json. Unmarshaling config.local.json over an
+// Config mirrors .tea-issue-sync.json. Unmarshaling .tea-issue-sync.local.json over an
 // already-populated value gives per-field overrides for free.
 type Config struct {
 	Gitea struct {
@@ -105,7 +105,7 @@ type Env struct {
 
 // LoadLocal resolves the config and output directory but does NOT resolve a
 // token or build a client — for commands that only touch the local mirror
-// (new/close/reopen/list), which must work offline. config.json is optional:
+// (new/close/reopen/list), which must work offline. The config file is optional:
 // gitea.url/owner/repo are inferred from the git remote when absent.
 func LoadLocal(configPath string) (*Env, error) {
 	cfg, anchor, err := resolveConfig(configPath)

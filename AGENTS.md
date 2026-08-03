@@ -10,8 +10,8 @@ Rules for AI agents working on this repository.
   `worktreeConfig` extension — create the PR from a shallow temp clone of the
   branch instead.
 - Don't put the Gitea instance URL in tracked files. The tool needs no
-  `config.json` here — it infers the repo from the `origin` remote. If you
-  need an override, use a gitignored `config.local.json`.
+  config here — it infers the repo from the `origin` remote. If you need an
+  override, use a gitignored `.tea-issue-sync.local.json`.
 
 ## Issues — dogfood the tool
 

@@ -127,7 +127,9 @@ Conventions:
 remote points at the Gitea repo and it infers everything — the instance URL,
 owner, and repo — from that remote. No config file required.
 
-Add a `config.json` only to override a default:
+Add a `.tea-issue-sync.json` only to override a default (the name is
+tool-specific on purpose, so it never collides with a project's own
+`config.json`):
 
 ```json
 {
@@ -148,10 +150,10 @@ defaulted:
 - `mirror.*` — how PR-mirror items are recognized.
 
 Config is resolved per *invocation*: `--config <path>` if given, else the
-nearest `config.json` from the cwd up to the git root, with an optional
-`config.local.json` overlay next to it (per-field, e.g. for a per-machine URL
-you don't want tracked). `output.dir` is relative to the config file, or the
-git root when there's no config.
+nearest `.tea-issue-sync.json` from the cwd up to the git root, with an
+optional `.tea-issue-sync.local.json` overlay next to it (per-field, e.g. for
+a per-machine URL you don't want tracked). `output.dir` is relative to the
+config file, or the git root when there's no config.
 
 The API token is resolved at runtime and **never stored in config or printed**:
 `$GITEA_TOKEN` first, otherwise the matching login's token from the

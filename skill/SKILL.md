@@ -80,5 +80,6 @@ there is no comment-posting (read with `cat`, don't edit).
   `config.yml`. The local-only verbs (`new`/`close`/`reopen`/`list`) need no
   token.
 - Config is optional: in a git repo whose `origin` points at the Gitea repo,
-  the URL/owner/repo are inferred from the remote. A `config.json` is only
-  needed to override (different repo/remote, custom `output.dir`, comments).
+  the URL/owner/repo are inferred from the remote. A `.tea-issue-sync.json` is
+  only needed to override (different repo/remote, custom `output.dir`,
+  comments).
