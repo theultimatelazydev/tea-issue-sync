@@ -20,7 +20,19 @@ jobs:
           go-version: '1.23'
       - run: go test ./...
       - run: make dist
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ ("^## \\[" v "\\]") {flag=1; next}
+            /^## \[/ {flag=0}
+            flag {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "See [CHANGELOG.md](CHANGELOG.md)." > release-notes.md
+          fi
+          echo "--- release notes ---"; cat release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/tea-issue-sync-*
-          generate_release_notes: true
+          body_path: release-notes.md

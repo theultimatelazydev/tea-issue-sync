@@ -20,7 +20,7 @@ import (
 
 // Version is overridable at build time via
 // -ldflags "-X github.com/theultimatelazydev/tea-issue-sync/internal/teasync.Version=...".
-var Version = "1.2.0"
+var Version = "1.2.1"
 
 // MANAGED_DIRS are wiped and rewritten on every full pull (Gitea is the
 // source of truth), so renames and deletions there don't leave stale files.
