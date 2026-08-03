@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-14
+
+### Changed
+- The optional config file is now **`.tea-issue-sync.json`** (with a
+  `.tea-issue-sync.local.json` overlay), not the generic `config.json`, so it
+  never collides with a project's own application config — and the upward
+  search no longer risks picking up an unrelated `config.json`. `config.json`
+  is no longer recognized; rename any existing one. Config remains optional
+  (inferred from the git remote), so most setups need no change.
+
 ## [1.2.1] - 2026-06-14
 
 ### Added
@@ -49,7 +59,8 @@ parity with `gh-issue-sync`. Replaces the earlier JavaScript/bun prototype
 - Native binaries via `make dist`, `go install`, an `install.sh`, and a GitHub
   Actions release workflow.
 
-[Unreleased]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/theultimatelazydev/tea-issue-sync/releases/tag/v1.1.0

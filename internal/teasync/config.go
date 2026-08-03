@@ -10,14 +10,24 @@ import (
 	"strings"
 )
 
+// ConfigName is the tool-specific config filename (deliberately not a generic
+// "config.json", which would collide with a project's own app config).
+const ConfigName = ".tea-issue-sync.json"
+
+// localConfigName is the per-machine overlay next to a config file:
+// .tea-issue-sync.json → .tea-issue-sync.local.json (and foo.json → foo.local.json).
+func localConfigName(configPath string) string {
+	return strings.TrimSuffix(configPath, ".json") + ".local.json"
+}
+
 func pathExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
 }
 
 // findConfig locates an optional config file. An explicit path that doesn't
-// exist is an error; otherwise it returns the nearest config.json walking up
-// from the cwd to the git root, or "" (no error) when there is none.
+// exist is an error; otherwise it returns the nearest .tea-issue-sync.json
+// walking up from the cwd to the git root, or "" (no error) when there is none.
 func findConfig(explicit string) (string, error) {
 	if explicit != "" {
 		p, err := filepath.Abs(explicit)
@@ -34,7 +44,7 @@ func findConfig(explicit string) (string, error) {
 		return "", err
 	}
 	for {
-		cand := filepath.Join(dir, "config.json")
+		cand := filepath.Join(dir, ConfigName)
 		if pathExists(cand) {
 			return cand, nil
 		}
@@ -65,7 +75,7 @@ func gitRoot() string {
 	}
 }
 
-// loadConfigFile parses config.json and overlays config.local.json (per
+// loadConfigFile parses .tea-issue-sync.json and overlays .tea-issue-sync.local.json (per
 // field). It does NOT apply defaults or validate — callers do that after
 // merging in any values inferred from the git remote.
 func loadConfigFile(configPath string) (*Config, error) {
@@ -77,7 +87,7 @@ func loadConfigFile(configPath string) (*Config, error) {
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("%s: %w", configPath, err)
 	}
-	localPath := filepath.Join(filepath.Dir(configPath), "config.local.json")
+	localPath := localConfigName(configPath)
 	if pathExists(localPath) {
 		ld, err := os.ReadFile(localPath)
 		if err != nil {
@@ -155,7 +165,7 @@ func resolveToken(giteaURL string) (string, error) {
 
 // resolveConfig produces the final Config and the directory the output folder
 // is anchored to. Precedence for gitea.url/owner/repo: explicit config values
-// win; anything omitted is inferred from the git remote. config.json is
+// win; anything omitted is inferred from the git remote. The config file is
 // optional — a git repo whose origin is the Gitea repo needs none.
 func resolveConfig(configPath string) (*Config, string, error) {
 	cfgPath, err := findConfig(configPath)
@@ -190,7 +200,7 @@ func resolveConfig(configPath string) (*Config, string, error) {
 	applyDefaults(cfg)
 
 	if cfg.Gitea.URL == "" || cfg.Gitea.Owner == "" || cfg.Gitea.Repo == "" {
-		return nil, "", errors.New("could not determine the Gitea repo: no config.json with gitea.url/owner/repo, and no git remote 'origin' to infer from. Add a config.json or run inside a git repo whose origin points at the Gitea repo")
+		return nil, "", errors.New("could not determine the Gitea repo: no " + ConfigName + " with gitea.url/owner/repo, and no git remote 'origin' to infer from. Add a " + ConfigName + " or run inside a git repo whose origin points at the Gitea repo")
 	}
 	if hint := nonGiteaHint(cfg.Gitea.URL); hint != "" {
 		return nil, "", errors.New(hint)
