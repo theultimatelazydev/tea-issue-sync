@@ -122,3 +122,65 @@ func TestCloseUnknownIssue(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+func TestDraftCommentNextToIssue(t *testing.T) {
+	env := tmpEnv(t)
+	// seed issue #42
+	seed := RenderMarkdown(Issue{Number: 42, Title: "Some Thing", State: "open"})
+	if err := os.WriteFile(filepath.Join(env.OutDir, "open", "42-some-thing.md"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := DraftComment(env, 42, "Looks good to me.", false); err != nil {
+		t.Fatal(err)
+	}
+	// written next to the issue file, singular .comment.md
+	if !pathExists(filepath.Join(env.OutDir, "open", "42-some-thing.comment.md")) {
+		t.Fatal("expected 42-some-thing.comment.md")
+	}
+	// readLocalIssues must NOT treat the pending comment as an issue
+	locals, err := readLocalIssues(env.OutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locals) != 1 || locals[0].File != "42-some-thing.md" {
+		t.Errorf("readLocalIssues picked up the comment file: %+v", locals)
+	}
+	// readPendingComments must find it, with the right number and body
+	pend, err := readPendingComments(env.OutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pend) != 1 || pend[0].Number != 42 || NormBody(pend[0].Body) != "Looks good to me." {
+		t.Errorf("pending = %+v", pend)
+	}
+}
+
+func TestDraftCommentWithoutMirroredIssue(t *testing.T) {
+	env := tmpEnv(t)
+	if err := DraftComment(env, 7, "note", false); err != nil {
+		t.Fatal(err)
+	}
+	// falls back to open/<n>.comment.md
+	if !pathExists(filepath.Join(env.OutDir, "open", "7.comment.md")) {
+		t.Fatal("expected open/7.comment.md")
+	}
+	pend, _ := readPendingComments(env.OutDir)
+	if len(pend) != 1 || pend[0].Number != 7 {
+		t.Errorf("pending = %+v", pend)
+	}
+}
+
+func TestReadPendingCommentsSkipsSidecar(t *testing.T) {
+	env := tmpEnv(t)
+	// a plural read-only sidecar must be ignored by pending scan
+	if err := os.WriteFile(filepath.Join(env.OutDir, "open", "5-x.comments.md"), []byte("# Comments\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pend, err := readPendingComments(env.OutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pend) != 0 {
+		t.Errorf("sidecar treated as pending: %+v", pend)
+	}
+}

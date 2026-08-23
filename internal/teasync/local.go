@@ -118,6 +118,44 @@ func setState(env *Env, number int64, state, reason string) error {
 	return nil
 }
 
+// DraftComment authors a pending comment for issue #number, written next to
+// the issue file as <n>-<slug>.comment.md (or open/<n>.comment.md when the
+// issue isn't in the mirror). `push` posts it to Gitea and deletes the file.
+func DraftComment(env *Env, number int64, body string, edit bool) error {
+	dir, file, ok := findIssueFile(env.OutDir, number)
+	var path string
+	if ok {
+		path = filepath.Join(env.OutDir, dir, strings.TrimSuffix(file, ".md")+".comment.md")
+	} else {
+		dir = "open"
+		if err := os.MkdirAll(filepath.Join(env.OutDir, dir), 0o755); err != nil {
+			return err
+		}
+		path = filepath.Join(env.OutDir, dir, fmt.Sprintf("%d.comment.md", number))
+	}
+	if body != "" {
+		if err := os.WriteFile(path, []byte(NormBody(body)+"\n"), 0o644); err != nil {
+			return err
+		}
+	} else if !pathExists(path) {
+		if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
+			return err
+		}
+	}
+	if edit {
+		if err := runEditor(path); err != nil {
+			return err
+		}
+	}
+	rel := dir + "/" + filepath.Base(path)
+	if b, _ := os.ReadFile(path); strings.TrimSpace(string(b)) == "" {
+		fmt.Printf("wrote empty %s — add the comment text (or use --body/--edit), then push\n", rel)
+	} else {
+		fmt.Printf("pending comment %s (run push to post it on #%d)\n", rel, number)
+	}
+	return nil
+}
+
 // ListOpts configures the `list` command.
 type ListOpts struct {
 	State  string // open | closed | all (default all)
@@ -177,7 +215,7 @@ func findIssueFile(outDir string, number int64) (dir, file string, ok bool) {
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".md") && !strings.HasSuffix(name, ".comments.md") {
+			if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".md") && !isCommentSidecar(name) && !isPendingComment(name) {
 				return d, name, true
 			}
 		}

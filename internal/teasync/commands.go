@@ -212,6 +212,9 @@ func Status(env *Env) error {
 	for _, r := range drift.Missing {
 		fmt.Printf("  ? #%d '%s' missing locally — run pull\n", r.Number, r.Title)
 	}
+	for _, pc := range drift.Pending {
+		fmt.Printf("  » comment on #%d  (%s/%s — push will post)\n", pc.Number, pc.Dir, pc.File)
+	}
 	parts := []string{fmt.Sprintf("%d in sync", drift.Clean)}
 	if len(drift.Modified) > 0 {
 		parts = append(parts, fmt.Sprintf("%d modified", len(drift.Modified)))
@@ -224,6 +227,9 @@ func Status(env *Env) error {
 	}
 	if len(drift.Missing) > 0 {
 		parts = append(parts, fmt.Sprintf("%d missing locally", len(drift.Missing)))
+	}
+	if len(drift.Pending) > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending comment(s)", len(drift.Pending)))
 	}
 	fmt.Println(strings.Join(parts, ", "))
 	if drift.any() {
@@ -259,6 +265,10 @@ func Diff(env *Env) error {
 	for _, l := range drift.Created {
 		emit(UnifiedDiff("", RenderMarkdown(LocalAsItem(l)), "remote/(none)", "local/"+l.Dir+"/"+l.File))
 	}
+	for _, pc := range drift.Pending {
+		emit(UnifiedDiff("", NormBody(pc.Body)+"\n",
+			fmt.Sprintf("remote/#%d/(no comment yet)", pc.Number), "local/"+pc.Dir+"/"+pc.File))
+	}
 	if printed == 0 {
 		fmt.Println("no content drift")
 	}
@@ -285,7 +295,7 @@ func Push(env *Env, opts PushOpts) error {
 	if len(drift.Missing) > 0 {
 		fmt.Fprintf(os.Stderr, "warning: %d remote issue(s) missing locally — run pull\n", len(drift.Missing))
 	}
-	if len(drift.Modified) == 0 && len(drift.Created) == 0 {
+	if len(drift.Modified) == 0 && len(drift.Created) == 0 && len(drift.Pending) == 0 {
 		fmt.Println("nothing to push")
 		return nil
 	}
@@ -390,6 +400,28 @@ func Push(env *Env, opts PushOpts) error {
 		}
 		fmt.Printf("created #%d from %s/%s → %s/%s\n", created.Number, l.Dir, l.File, l.Dir, newFile)
 	}
+
+	// Post locally-authored comments (<n>.comment.md), then remove the file.
+	for _, pc := range drift.Pending {
+		rel := pc.Dir + "/" + pc.File
+		body := NormBody(pc.Body)
+		if body == "" {
+			fmt.Fprintf(os.Stderr, "warning: %s is empty — skipped (add text or delete it)\n", rel)
+			continue
+		}
+		if opts.DryRun {
+			fmt.Printf("[dry-run] would post comment on #%d (%s)\n", pc.Number, rel)
+			continue
+		}
+		if _, err := env.Client.Send("POST", fmt.Sprintf("%s/issues/%d/comments", rp, pc.Number),
+			map[string]any{"body": body}); err != nil {
+			return fmt.Errorf("posting comment on #%d (%s): %w", pc.Number, rel, err)
+		}
+		if err := os.Remove(filepath.Join(env.OutDir, pc.Dir, pc.File)); err != nil {
+			return err
+		}
+		fmt.Printf("commented on #%d (posted, removed %s)\n", pc.Number, rel)
+	}
 	return nil
 }
 
@@ -432,6 +464,7 @@ Edit locally (no network; run push to sync):
                                                     Create a new issue file (push creates it on Gitea)
   tea-issue-sync close <n> [--reason completed|not_planned]   Mark #n closed and move it to closed/
   tea-issue-sync reopen <n>                         Mark #n open and move it to open/
+  tea-issue-sync comment <n> [--body TEXT] [--edit] Draft a comment on #n (push posts it to Gitea)
   tea-issue-sync list [--state open|closed|all] [--label L] [--search TEXT]
                                                     List issues from the local mirror
 

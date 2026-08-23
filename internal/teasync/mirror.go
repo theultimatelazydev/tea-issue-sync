@@ -10,10 +10,25 @@ import (
 	"strings"
 )
 
-var reLeadingNum = regexp.MustCompile(`^(\d+)-`)
+var (
+	reLeadingNum = regexp.MustCompile(`^(\d+)-`)
+	reCommentNum = regexp.MustCompile(`^(\d+)`)
+)
 
 func commentsFileFor(issueFile string) string {
 	return strings.TrimSuffix(issueFile, ".md") + ".comments.md"
+}
+
+// isCommentSidecar reports the read-only pulled comment mirror
+// (<index>-<slug>.comments.md, plural).
+func isCommentSidecar(name string) bool {
+	return strings.HasSuffix(name, ".comments.md")
+}
+
+// isPendingComment reports a comment authored locally and waiting to be posted
+// (<n>.comment.md or <n>-<slug>.comment.md, singular).
+func isPendingComment(name string) bool {
+	return strings.HasSuffix(name, ".comment.md")
 }
 
 // routeFor decides where an item's file goes and what it's called.
@@ -46,7 +61,7 @@ func readLocalIssues(outDir string) ([]Local, error) {
 		}
 		for _, e := range entries {
 			file := e.Name()
-			if !strings.HasSuffix(file, ".md") || strings.HasSuffix(file, ".comments.md") {
+			if !strings.HasSuffix(file, ".md") || isCommentSidecar(file) || isPendingComment(file) {
 				continue
 			}
 			content, err := os.ReadFile(filepath.Join(d, file))
@@ -85,7 +100,7 @@ func countMirror(outDir string) (issues, pulls int) {
 			}
 			for _, e := range entries {
 				name := e.Name()
-				if strings.HasSuffix(name, ".md") && !strings.HasSuffix(name, ".comments.md") {
+				if strings.HasSuffix(name, ".md") && !isCommentSidecar(name) && !isPendingComment(name) {
 					total++
 				}
 			}
@@ -154,17 +169,65 @@ type ModItem struct {
 	Fields []string
 }
 
+// PendingComment is a comment authored locally (a <n>.comment.md file) that
+// push will post to issue #Number and then delete.
+type PendingComment struct {
+	Dir    string
+	File   string
+	Number int64
+	Body   string
+}
+
+// readPendingComments collects *.comment.md files from open/ and closed/. The
+// leading number in the filename identifies the issue to comment on.
+func readPendingComments(outDir string) ([]PendingComment, error) {
+	var out []PendingComment
+	for _, dir := range []string{"open", "closed"} {
+		entries, err := os.ReadDir(filepath.Join(outDir, dir))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if !isPendingComment(name) {
+				continue
+			}
+			m := reCommentNum.FindStringSubmatch(name)
+			if m == nil {
+				continue
+			}
+			n, _ := parseInt64(m[1])
+			b, err := os.ReadFile(filepath.Join(outDir, dir, name))
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, PendingComment{Dir: dir, File: name, Number: n, Body: string(b)})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Number != out[j].Number {
+			return out[i].Number < out[j].Number
+		}
+		return out[i].File < out[j].File
+	})
+	return out, nil
+}
+
 // Drift classifies every local file against the remote.
 type Drift struct {
 	Modified []ModItem
 	Created  []Local
 	Orphaned []Local
 	Missing  []Issue
+	Pending  []PendingComment
 	Clean    int
 }
 
 func (d Drift) any() bool {
-	return len(d.Modified)+len(d.Created)+len(d.Orphaned)+len(d.Missing) > 0
+	return len(d.Modified)+len(d.Created)+len(d.Orphaned)+len(d.Missing)+len(d.Pending) > 0
 }
 
 func computeDrift(env *Env) (Drift, error) {
@@ -211,5 +274,11 @@ func computeDrift(env *Env) (Drift, error) {
 	}
 	// Map iteration is unordered; sort for stable output.
 	sort.Slice(drift.Missing, func(i, j int) bool { return drift.Missing[i].Number < drift.Missing[j].Number })
+
+	pending, err := readPendingComments(env.OutDir)
+	if err != nil {
+		return Drift{}, err
+	}
+	drift.Pending = pending
 	return drift, nil
 }

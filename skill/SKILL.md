@@ -26,6 +26,7 @@ Edit locally (no network, no token; run `push` to sync):
 tea-issue-sync new "Title" [--label L]... [--body TEXT] [--state open|closed]
 tea-issue-sync close <n> [--reason completed|not_planned]
 tea-issue-sync reopen <n>
+tea-issue-sync comment <n> [--body TEXT] [--edit]
 tea-issue-sync list [--state open|closed|all] [--label L] [--search TEXT]
 ```
 
@@ -63,11 +64,15 @@ Flip `state:` in the frontmatter (or use `close` / `reopen`). `push` updates
 the remote state. The frontmatter `state` wins over which folder the file is
 in; folders are reorganized on the next `pull`.
 
-## Comments (read-only)
+## Comments
 
-When `output.comments` is true, each issue's comments are mirrored to a
-read-only sidecar `<index>-<slug>.comments.md`. These are **not** pushed —
-there is no comment-posting (read with `cat`, don't edit).
+- **Read**: when `output.comments` is true, each pull mirrors an issue's
+  comments into a read-only sidecar `<index>-<slug>.comments.md` (plural).
+  Don't edit these — read with `cat`.
+- **Post**: a singular `<n>.comment.md` (or `<index>-<slug>.comment.md`) file
+  is a pending comment; `push` posts it on issue `#n` and deletes the file.
+  Use `comment <n> --body "…"` (or `--edit`) to write it. `status` lists
+  pending comments.
 
 ## Notes
 
