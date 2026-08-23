@@ -27,9 +27,10 @@ type PushOpts struct {
 	DryRun bool
 }
 
-// Pull mirrors Gitea into the output folder. A full pull wipes and rewrites
-// the managed subfolders; an incremental pull only rewrites issues updated
-// since the last sync.
+// Pull mirrors Gitea into the output folder. A full pull refreshes the
+// managed subfolders from the remote (reaping deletions) but preserves
+// local-only work — unpushed drafts and pending comments. An incremental
+// pull only rewrites issues updated since the last sync.
 func Pull(env *Env, opts PullOpts) error {
 	if opts.Incremental {
 		return pullIncremental(env, opts.DryRun)
@@ -90,15 +91,11 @@ func Pull(env *Env, opts PullOpts) error {
 		return nil
 	}
 
-	for _, sub := range managedDirs {
-		if err := os.RemoveAll(filepath.Join(env.OutDir, sub)); err != nil {
-			return err
-		}
-	}
-	for _, sub := range managedDirs {
-		if err := os.MkdirAll(filepath.Join(env.OutDir, sub), 0o755); err != nil {
-			return err
-		}
+	// Remove remote-sourced files and rewrite from the fetch, but KEEP
+	// local-only work (unpushed drafts and pending comments).
+	kept, err := wipeRemoteMirror(env.OutDir)
+	if err != nil {
+		return err
 	}
 	for _, p := range plan {
 		if err := os.WriteFile(filepath.Join(env.OutDir, p.dir, p.file), []byte(p.content), 0o644); err != nil {
@@ -112,7 +109,30 @@ func Pull(env *Env, opts PullOpts) error {
 		return err
 	}
 	fmt.Printf("Wrote %d issues + %d pulls%s to %s/\n", nIssue, nPull, commentNote, relForLog(env.OutDir))
+	warnPreserved(kept)
 	return nil
+}
+
+// warnPreserved tells the user which local-only files a full pull kept and
+// nudges them to push so the work isn't only on their machine.
+func warnPreserved(kept PreservedLocal) {
+	if !kept.any() {
+		return
+	}
+	var bits []string
+	if len(kept.Drafts) > 0 {
+		bits = append(bits, fmt.Sprintf("%d draft(s)", len(kept.Drafts)))
+	}
+	if len(kept.Comments) > 0 {
+		bits = append(bits, fmt.Sprintf("%d pending comment(s)", len(kept.Comments)))
+	}
+	fmt.Fprintf(os.Stderr, "note: kept %s not yet on Gitea — run `push` so they aren't only local:\n", strings.Join(bits, " + "))
+	for _, f := range kept.Drafts {
+		fmt.Fprintf(os.Stderr, "        %s\n", f)
+	}
+	for _, f := range kept.Comments {
+		fmt.Fprintf(os.Stderr, "        %s\n", f)
+	}
 }
 
 // pullIncremental rewrites only issues updated since the marker's high-water
@@ -161,7 +181,8 @@ func pullIncremental(env *Env, dryRun bool) error {
 				continue
 			}
 			for _, e := range entries {
-				if strings.HasPrefix(e.Name(), prefix) {
+				// Refresh the issue's mirror files but keep a pending comment.
+				if strings.HasPrefix(e.Name(), prefix) && !isPendingComment(e.Name()) {
 					if err := os.Remove(filepath.Join(env.OutDir, sub, e.Name())); err != nil {
 						return err
 					}
@@ -472,7 +493,8 @@ Agent setup:
   tea-issue-sync skill install [--project] [--dir <path>]   Install the agent skill (default ~/.claude/skills/)
   tea-issue-sync skill print                                Print the embedded SKILL.md to stdout
 
-  tea-issue-sync --help | --version
+  tea-issue-sync version                                    Print the installed version (also --version / -v)
+  tea-issue-sync --help
 
 Every command accepts --config <path>.
 

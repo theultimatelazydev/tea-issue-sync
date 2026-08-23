@@ -29,10 +29,13 @@ file per issue into an output folder:
   .gitea-sync.json                    provenance + counts (generated)
 ```
 
-Each run wipes and rewrites those managed subfolders — **Gitea is the source of
-truth**, so renames and deletions there propagate cleanly without leaving stale
-local files. The tool and the data it produces live in separate folders so the
-tool can move independently of any particular repo's mirror.
+Each run refreshes those managed subfolders from the remote — **Gitea is the
+source of truth**, so renames and deletions there propagate cleanly without
+leaving stale local files. **Local-only work is preserved**, though: unpushed
+drafts (files without a `<number>-` prefix) and pending `.comment.md` files
+survive a pull, and the tool prints a note reminding you to `push` them. The
+tool and the data it produces live in separate folders so the tool can move
+independently of any particular repo's mirror.
 
 > The output folder is typically a local read-cache (e.g. `.gitignore`d) since
 > the issues already live on the server — the Markdown just saves you a round

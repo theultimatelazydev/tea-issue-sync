@@ -184,3 +184,44 @@ func TestReadPendingCommentsSkipsSidecar(t *testing.T) {
 		t.Errorf("sidecar treated as pending: %+v", pend)
 	}
 }
+
+func TestWipeRemoteMirrorPreservesLocalOnly(t *testing.T) {
+	env := tmpEnv(t)
+	write := func(sub, name string) {
+		if err := os.WriteFile(filepath.Join(env.OutDir, sub, name), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// remote-sourced (must be wiped)
+	write("open", "42-foo.md")          // issue mirror
+	write("open", "42-foo.comments.md") // read-only sidecar
+	write("closed", "9-bar.md")         // issue mirror
+	// local-only (must be preserved)
+	write("open", "my-idea.md")        // number-less draft
+	write("open", "Ta1f0-phase0.md")   // T-prefixed draft
+	write("open", "42-foo.comment.md") // pending comment (numbered)
+	write("open", "7.comment.md")      // pending comment (no dash)
+
+	kept, err := wipeRemoteMirror(env.OutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := []string{"open/42-foo.md", "open/42-foo.comments.md", "closed/9-bar.md"}
+	for _, g := range gone {
+		if pathExists(filepath.Join(env.OutDir, g)) {
+			t.Errorf("expected %s wiped", g)
+		}
+	}
+	stay := []string{"open/my-idea.md", "open/Ta1f0-phase0.md", "open/42-foo.comment.md", "open/7.comment.md"}
+	for _, s := range stay {
+		if !pathExists(filepath.Join(env.OutDir, s)) {
+			t.Errorf("expected %s preserved", s)
+		}
+	}
+	if len(kept.Drafts) != 2 {
+		t.Errorf("drafts kept = %v", kept.Drafts)
+	}
+	if len(kept.Comments) != 2 {
+		t.Errorf("comments kept = %v", kept.Comments)
+	}
+}

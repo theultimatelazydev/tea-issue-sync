@@ -228,7 +228,7 @@ func main() {
 			fatal("skill: unknown subcommand '" + sub + "' (use: install [--project] [--dir <path>] | print)")
 		}
 
-	case "--version", "-v":
+	case "version", "--version", "-v", "--v":
 		fmt.Printf("tea-issue-sync %s\n", tea.Version)
 	case "--help", "-h", "":
 		fmt.Println(tea.Help())
