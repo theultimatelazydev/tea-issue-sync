@@ -216,6 +216,62 @@ func readPendingComments(outDir string) ([]PendingComment, error) {
 	return out, nil
 }
 
+// shouldWipe reports whether a file in a managed dir came from the remote (an
+// issue mirror <n>-slug.md or a comment sidecar <n>-slug.comments.md) and so
+// should be removed and rewritten on a full pull. Local-only work — drafts
+// without a number prefix, and pending <n>.comment.md posts — returns false.
+func shouldWipe(name string) bool {
+	return strings.HasSuffix(name, ".md") && reLeadingNum.MatchString(name) && !isPendingComment(name)
+}
+
+// PreservedLocal lists the local-only files a full pull kept (dir/file).
+type PreservedLocal struct {
+	Drafts   []string
+	Comments []string
+}
+
+func (p PreservedLocal) any() bool { return len(p.Drafts)+len(p.Comments) > 0 }
+
+// wipeRemoteMirror removes remote-sourced files from the managed dirs — so a
+// full pull still reaps remote deletions and refreshes everything — while
+// preserving local-only work: unpushed drafts and pending comments. It also
+// ensures the managed dirs exist. Returns what it kept.
+func wipeRemoteMirror(outDir string) (PreservedLocal, error) {
+	var kept PreservedLocal
+	for _, sub := range managedDirs {
+		d := filepath.Join(outDir, sub)
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			if os.IsNotExist(err) {
+				if err := os.MkdirAll(d, 0o755); err != nil {
+					return kept, err
+				}
+				continue
+			}
+			return kept, err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() {
+				continue
+			}
+			if shouldWipe(name) {
+				if err := os.Remove(filepath.Join(d, name)); err != nil {
+					return kept, err
+				}
+				continue
+			}
+			switch {
+			case isPendingComment(name):
+				kept.Comments = append(kept.Comments, sub+"/"+name)
+			case strings.HasSuffix(name, ".md") && !isCommentSidecar(name):
+				kept.Drafts = append(kept.Drafts, sub+"/"+name)
+			}
+		}
+	}
+	return kept, nil
+}
+
 // Drift classifies every local file against the remote.
 type Drift struct {
 	Modified []ModItem

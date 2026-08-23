@@ -69,6 +69,8 @@ Go): a ~6 MB native binary instead of a ~70 MB embedded-runtime one, plus
 - [x] Post comments back: a singular `<n>.comment.md` file is a pending
       comment that `push` posts and removes (`comment` verb writes it),
       completing the two-way comment sync
+- [x] Safe pull: a full pull preserves local-only work (unpushed drafts and
+      pending comments) instead of wiping it, and warns about what it kept
 
 ## Later / ideas
 
