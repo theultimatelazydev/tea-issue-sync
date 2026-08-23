@@ -73,6 +73,7 @@ tea-issue-sync push --dry-run       # show what push would do
 tea-issue-sync new "Title" --label bug --body "…"   # create an issue file
 tea-issue-sync close 42 --reason completed          # mark closed, move to closed/
 tea-issue-sync reopen 42                             # mark open, move to open/
+tea-issue-sync comment 42 --body "…"                 # draft a comment (push posts it)
 tea-issue-sync list --search login --state open      # list from the local mirror
 
 tea-issue-sync --help               # also: --version
@@ -93,11 +94,26 @@ full `pull` periodically to reap those.
 
 ### Comments
 
-Set `"comments": true` in the `output` section to mirror each issue's
-comments into a read-only sidecar next to the issue file —
-`<index>-<slug>.comments.md` — one `## @author — timestamp` section per
-comment. The issue file itself stays in the `gh-issue-sync`-compatible
-format, and `status` / `diff` / `push` ignore the sidecars.
+**Reading** — set `"comments": true` in the `output` section and each pull
+mirrors an issue's comments into a read-only sidecar next to the issue file,
+`<index>-<slug>.comments.md` (plural), one `## @author — timestamp` section
+per comment.
+
+**Posting** — drop a **singular** `<n>.comment.md` (or
+`<index>-<slug>.comment.md`) file holding plain Markdown, and `push` posts it
+as a new comment on issue `#n`, then deletes the file. The convenience verb
+writes it for you:
+
+```bash
+tea-issue-sync comment 42 --body "Fixed in the latest push."
+tea-issue-sync comment 42 --edit          # open $EDITOR to write it
+tea-issue-sync status                     # shows pending comments
+tea-issue-sync push                       # posts them
+```
+
+The issue file itself stays in the `gh-issue-sync`-compatible format;
+`status`/`diff`/`push` treat the plural `.comments.md` as read-only and the
+singular `.comment.md` as a pending post.
 
 ## Editing issues locally
 

@@ -133,6 +133,37 @@ func main() {
 			exitOn(tea.Reopen(env, number))
 		}
 
+	case "comment":
+		number, body := int64(0), ""
+		edit := false
+		for i := 0; i < len(rest); i++ {
+			switch a := rest[i]; a {
+			case "--body":
+				body = flagValue(rest, i, a)
+				i++
+			case "--edit":
+				edit = true
+			case "--config":
+				i++
+			default:
+				if len(a) > 0 && a[0] != '-' && number == 0 {
+					n, err := strconv.ParseInt(a, 10, 64)
+					if err != nil {
+						fatal(fmt.Sprintf("comment: expected an issue number, got %q", a))
+					}
+					number = n
+				}
+			}
+		}
+		if number == 0 {
+			fatal("comment requires an issue number (e.g. tea-issue-sync comment 42 --body \"...\")")
+		}
+		env, err := tea.LoadLocal(configPath)
+		if err != nil {
+			fatal(err.Error())
+		}
+		exitOn(tea.DraftComment(env, number, body, edit))
+
 	case "list":
 		opts := tea.ListOpts{}
 		for i := 0; i < len(rest); i++ {

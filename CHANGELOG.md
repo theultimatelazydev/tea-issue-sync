@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-14
+
+### Added
+- **Post comments**, closing the loop on comment sync (pull already mirrored
+  them read-only). A singular `<n>.comment.md` (or `<index>-<slug>.comment.md`)
+  file is a pending comment; `push` posts it on issue `#n` and deletes the
+  file. New `comment <n> [--body TEXT] [--edit]` verb writes the file, and
+  `status`/`diff` list pending comments. The plural read-only
+  `<index>-<slug>.comments.md` mirror is unchanged.
+
 ## [1.3.0] - 2026-06-14
 
 ### Changed
@@ -59,7 +69,8 @@ parity with `gh-issue-sync`. Replaces the earlier JavaScript/bun prototype
 - Native binaries via `make dist`, `go install`, an `install.sh`, and a GitHub
   Actions release workflow.
 
-[Unreleased]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/theultimatelazydev/tea-issue-sync/compare/v1.1.0...v1.2.0

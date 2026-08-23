@@ -66,6 +66,9 @@ Go): a ~6 MB native binary instead of a ~70 MB embedded-runtime one, plus
       `config.json`)
 - [x] `install.sh` installs to `~/.local/bin` (no sudo) and warns if it's not
       on PATH
+- [x] Post comments back: a singular `<n>.comment.md` file is a pending
+      comment that `push` posts and removes (`comment` verb writes it),
+      completing the two-way comment sync
 
 ## Later / ideas
 
